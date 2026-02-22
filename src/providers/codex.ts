@@ -9,6 +9,7 @@ import type {
   AgentAttachment,
 } from '../types/providers.js';
 import { getToolDisplayName } from './tool-classification.js';
+import { diagnoseError, formatDiagnostic } from './diagnostics.js';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -219,11 +220,12 @@ export class CodexProvider implements AgentProvider {
           return await processEvents(events, config.contextId, config.onEvent, abortController.signal);
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
+          const diag = formatDiagnostic(diagnoseError('codex', message, config.workingDirectory));
           config.onEvent({
             id: uuid(), contextId: config.contextId, type: 'error',
-            content: `Codex SDK error: ${message}`, timestamp: Date.now(),
+            content: `Codex SDK error: ${diag}`, timestamp: Date.now(),
           });
-          return { status: 'failed', error: message };
+          return { status: 'failed', error: diag };
         }
       },
 

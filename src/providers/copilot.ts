@@ -12,6 +12,7 @@ import type {
   AgentResult,
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
+import { diagnoseError, formatDiagnostic } from './diagnostics.js';
 
 export interface CopilotProviderOptions {
   model?: string;
@@ -160,12 +161,14 @@ export class CopilotProvider implements AgentProvider {
             ...(sdkAttachments?.length ? { attachments: sdkAttachments } : {}),
           });
           if (lastSessionError) {
-            return { status: 'failed', error: lastSessionError };
+            const diag = formatDiagnostic(diagnoseError('copilot', lastSessionError, config.workingDirectory));
+            return { status: 'failed', error: diag };
           }
           return { status: 'complete' };
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
-          return { status: 'failed', error: message };
+          const diag = formatDiagnostic(diagnoseError('copilot', message, config.workingDirectory));
+          return { status: 'failed', error: diag };
         }
       },
 

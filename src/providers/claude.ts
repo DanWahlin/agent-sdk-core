@@ -10,6 +10,7 @@ import type {
   AgentAttachment,
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
+import { diagnoseError, formatDiagnostic } from './diagnostics.js';
 
 export interface ClaudeProviderOptions {
   model?: string;
@@ -189,11 +190,12 @@ export class ClaudeProvider implements AgentProvider {
             return await runQuery(prompt, config.attachments, config.onEvent, config.contextId);
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
+            const diag = formatDiagnostic(diagnoseError('claude', message, config.workingDirectory));
             config.onEvent({
               id: uuid(), contextId: config.contextId, type: 'error',
-              content: `Claude SDK error: ${message}`, timestamp: Date.now(),
+              content: `Claude SDK error: ${diag}`, timestamp: Date.now(),
             });
-            return { status: 'failed', error: message };
+            return { status: 'failed', error: diag };
           }
         });
       },
@@ -207,9 +209,10 @@ export class ClaudeProvider implements AgentProvider {
             await runQuery(message, undefined, config.onEvent, config.contextId);
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
+            const diag = formatDiagnostic(diagnoseError('claude', msg, config.workingDirectory));
             config.onEvent({
               id: uuid(), contextId: config.contextId, type: 'error',
-              content: `Claude SDK error: ${msg}`, timestamp: Date.now(),
+              content: `Claude SDK error: ${diag}`, timestamp: Date.now(),
             });
           }
         });
