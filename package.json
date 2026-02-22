@@ -27,7 +27,7 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/ws-client.test.ts tests/ws-server.test.ts",
+    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts",
     "test:e2e": "node --import tsx/esm --test tests/e2e.test.ts",
     "test:all": "node --import tsx/esm --test tests/*.test.ts"
   },
