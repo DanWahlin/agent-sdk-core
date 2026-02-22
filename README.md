@@ -1,7 +1,7 @@
 # Agent SDK Core
 
 <p align="center">
-  <img src="logo.png" alt="agent-sdk-core logo" width="400">
+  <img src="images/logo.png" alt="agent-sdk-core logo" width="400">
 </p>
 
 ## What is agent-sdk-core?
