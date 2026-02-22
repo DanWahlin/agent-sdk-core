@@ -115,7 +115,9 @@ export class WSClient {
     };
 
     this.ws.onerror = () => {
-      this.ws?.close();
+      // Don't call ws.close() here — Node 22's native WebSocket fires
+      // another error if close() is called during error handling.
+      // The onclose handler will fire automatically after onerror.
     };
   }
 
