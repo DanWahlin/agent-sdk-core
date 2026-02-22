@@ -17,6 +17,21 @@ It also provides optional utilities that most agent-powered apps need: WebSocket
 
 Currently used by three projects: [copilot-kanban-agent](https://github.com/DanWahlin/copilot-kanban-board), agentmic, and zingit.
 
+## Features
+
+- **Unified Provider Interface** — Single `AgentProvider`/`AgentSession` API that works identically across Copilot, Claude Code, and Codex SDKs
+- **Rich Event Stream** — 10 granular `AgentEvent` types (thinking, output, command, command_output, file_read, file_write, file_edit, tool_call, test_result, error, complete) with metadata for files, diffs, commands, and test results
+- **Session Resume** — Continue previous agent sessions via `resumeSessionId` (Copilot `resumeSession()`, Codex `resumeThread()`, Claude `resume` option)
+- **Image/Attachment Support** — Pass screenshots and files to agents via a unified `AgentAttachment` type — each provider handles the SDK-specific format
+- **Middleware Hooks** — Inject `onPreToolUse` (e.g., worktree path rewriting) and `onPermissionRequest` (e.g., tool deny-lists) without modifying provider code
+- **Agent Detection** — `detectAgents()` checks which CLI tools are installed and available on the system
+- **Progress Aggregator** — Batches events over a configurable interval and produces TTS-friendly summaries ("Reading 3 files", "All 5 tests passing")
+- **WebSocket Server Utilities** — `createWSServer()` factory with heartbeat ping/pong, `broadcast()` to all clients, configurable path and payload limits
+- **WebSocket Client** — `WSClient` class with exponential backoff reconnection, offline message queue, listener-based pub/sub with auto-cleanup
+- **Generic WSMessage Envelope** — `WSMessage<T>` typed generic that each consumer extends with its own message vocabulary
+- **Tool Classification** — Shared `classifyToolKind()` maps SDK tool names to granular event types across all providers
+- **Peer Dependencies** — SDKs are optional peer deps — install only the agents you use
+
 ## Installation
 
 ```bash
