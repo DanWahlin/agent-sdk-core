@@ -1,5 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import type { SpawnOptions, SpawnedProcess } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentType } from '../types/agents.js';
 import type {
   AgentProvider,
@@ -12,6 +13,10 @@ import { classifyToolKind } from './tool-classification.js';
 
 export interface ClaudeProviderOptions {
   model?: string;
+  /** Permission mode for Claude Code (default: 'acceptEdits') */
+  permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+  /** Custom spawn function (e.g., to run Claude Code as a non-root user) */
+  spawnClaudeCodeProcess?: (options: SpawnOptions) => SpawnedProcess;
 }
 
 type ContentBlock =
@@ -22,9 +27,13 @@ export class ClaudeProvider implements AgentProvider {
   readonly name: AgentType = 'claude';
   readonly displayName = 'Claude Code';
   readonly model: string;
+  private permissionMode: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+  private spawnFn?: (options: SpawnOptions) => SpawnedProcess;
 
   constructor(options?: ClaudeProviderOptions) {
     this.model = options?.model || process.env.CLAUDE_MODEL || 'claude-opus-4-20250514';
+    this.permissionMode = options?.permissionMode || 'acceptEdits';
+    this.spawnFn = options?.spawnClaudeCodeProcess;
   }
 
   async start(): Promise<void> {
@@ -37,6 +46,8 @@ export class ClaudeProvider implements AgentProvider {
 
   async createSession(config: AgentSessionConfig): Promise<AgentSession> {
     const model = this.model;
+    const permissionMode = this.permissionMode;
+    const spawnFn = this.spawnFn;
     let sessionId: string | null = config.resumeSessionId || null;
     let aborted = false;
 
@@ -83,9 +94,10 @@ export class ClaudeProvider implements AgentProvider {
         options: {
           model,
           cwd: config.workingDirectory,
-          permissionMode: 'acceptEdits',
+          permissionMode,
           systemPrompt: config.systemPrompt,
           ...(sessionId ? { resume: sessionId } : {}),
+          ...(spawnFn ? { spawnClaudeCodeProcess: spawnFn } : {}),
         },
       });
 
