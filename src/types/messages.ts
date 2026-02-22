@@ -1,2 +1,5 @@
-// Placeholder — filled in unified-event-types todo
-export interface WSMessage<T = unknown> {}
+export interface WSMessage<T = unknown> {
+  type: string;
+  payload: T;
+  timestamp?: number;
+}
