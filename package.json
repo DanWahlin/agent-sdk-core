@@ -1,0 +1,57 @@
+{
+  "name": "@agent-sdk/core",
+  "version": "0.1.0",
+  "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    },
+    "./ws": {
+      "types": "./dist/ws/index.d.ts",
+      "import": "./dist/ws/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build",
+    "test": "node --test --experimental-strip-types tests/**/*.test.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "peerDependencies": {
+    "@github/copilot-sdk": "^0.1.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.0",
+    "@openai/codex-sdk": "^0.98.0",
+    "ws": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@github/copilot-sdk": { "optional": true },
+    "@anthropic-ai/claude-agent-sdk": { "optional": true },
+    "@openai/codex-sdk": { "optional": true },
+    "ws": { "optional": true }
+  },
+  "dependencies": {
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "~5.7.0"
+  },
+  "license": "MIT"
+}
