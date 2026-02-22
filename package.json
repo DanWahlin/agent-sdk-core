@@ -34,24 +34,36 @@
     "src"
   ],
   "peerDependencies": {
-    "@github/copilot-sdk": "^0.1.0",
     "@anthropic-ai/claude-agent-sdk": "^0.2.0",
+    "@github/copilot-sdk": "^0.1.0",
     "@openai/codex-sdk": "^0.98.0",
     "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
-    "@github/copilot-sdk": { "optional": true },
-    "@anthropic-ai/claude-agent-sdk": { "optional": true },
-    "@openai/codex-sdk": { "optional": true },
-    "ws": { "optional": true }
+    "@github/copilot-sdk": {
+      "optional": true
+    },
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    },
+    "@openai/codex-sdk": {
+      "optional": true
+    },
+    "ws": {
+      "optional": true
+    }
   },
   "dependencies": {
     "uuid": "^11.0.0"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.50",
+    "@github/copilot-sdk": "^0.1.25",
+    "@openai/codex-sdk": "^0.104.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
-    "typescript": "~5.7.0"
+    "typescript": "~5.7.0",
+    "ws": "^8.19.0"
   },
   "license": "MIT"
 }
