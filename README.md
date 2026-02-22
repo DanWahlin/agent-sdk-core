@@ -1,6 +1,21 @@
 # @codewithdan/agent-sdk-core
 
-Shared foundation for integrating AI coding agent SDKs (GitHub Copilot, Claude Code, OpenAI Codex) across multiple projects.
+## What is this?
+
+A shared TypeScript package that provides a unified interface for working with AI coding agent SDKs — GitHub Copilot, Claude Code, and OpenAI Codex. Instead of writing separate integration code for each SDK in every project, this package gives you one consistent API for creating agent sessions, streaming events, and managing connections.
+
+## Why use it?
+
+Each AI coding agent SDK has its own API patterns:
+- **Copilot** uses event subscriptions with `session.on(callback)` + `sendAndWait()`
+- **Claude Code** uses async generators with `for await (const msg of query(...))`
+- **Codex** uses threaded streams with `thread.runStreamed()`
+
+This package normalizes all three into a single `AgentProvider` / `AgentSession` interface with a unified `AgentEvent` stream. You write your event handling once, and it works with any agent.
+
+It also provides optional utilities that most agent-powered apps need: WebSocket server/client helpers with heartbeat and reconnection, a progress aggregator for TTS-friendly summaries, and agent CLI detection.
+
+Currently used by three projects: [copilot-kanban-agent](https://github.com/DanWahlin/copilot-kanban-board), agentmic, and zingit.
 
 ## Installation
 
