@@ -129,20 +129,21 @@ export class CodexProvider implements AgentProvider {
                     metadata: { command: event.item.command },
                   });
                   onEvent({
-                    id: uuid(), contextId, type: 'output',
+                    id: uuid(), contextId, type: 'command_output',
                     content: event.item.aggregated_output,
                     timestamp: Date.now(),
                   });
                   break;
                 case 'file_change': {
-                  const files = event.item.changes
-                    .map((c: { kind: string; path: string }) => `${c.kind}: ${c.path}`)
-                    .join(', ');
-                  onEvent({
-                    id: uuid(), contextId, type: 'output',
-                    content: `Files changed: ${files}`,
-                    timestamp: Date.now(),
-                  });
+                  const changes = event.item.changes as Array<{ kind: string; path: string }>;
+                  for (const change of changes) {
+                    onEvent({
+                      id: uuid(), contextId, type: 'file_write',
+                      content: `${change.kind}: ${change.path}`,
+                      timestamp: Date.now(),
+                      metadata: { file: change.path },
+                    });
+                  }
                   break;
                 }
               }

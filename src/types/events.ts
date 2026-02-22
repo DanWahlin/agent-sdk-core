@@ -3,9 +3,13 @@ import type { AgentType } from './agents.js';
 export type AgentEventType =
   | 'thinking'
   | 'tool_call'
-  | 'file_edit'
+  | 'file_read'
+  | 'file_write'
+  | 'file_edit'       // alias: consumers that don't distinguish read/write can use this
   | 'command'
+  | 'command_output'
   | 'output'
+  | 'test_result'
   | 'error'
   | 'complete';
 
@@ -17,6 +21,10 @@ export interface AgentEventMetadata {
   agentType?: AgentType;
   duration?: number;
   error?: string;
+  /** For test_result: number of tests passing */
+  testsPassing?: number;
+  /** For test_result: number of tests failing */
+  testsFailing?: number;
 }
 
 export interface AgentEvent {

@@ -5,6 +5,7 @@ import {
   type SessionEvent,
 } from '@github/copilot-sdk';
 import type { AgentType } from '../types/agents.js';
+import type { AgentEventType } from '../types/events.js';
 import type {
   AgentProvider,
   AgentSession,
@@ -215,18 +216,21 @@ function mapSessionEvent(
       onEvent({ id: uuid(), contextId, type: 'output', content: event.data.deltaContent, timestamp: Date.now() });
       break;
 
-    case 'tool.execution_start':
+    case 'tool.execution_start': {
+      const toolName = event.data.toolName;
+      const kind = classifyToolKind(toolName);
       onEvent({
-        id: uuid(), contextId, type: 'command',
-        content: `${event.data.toolName}: ${JSON.stringify(event.data.arguments ?? '')}`,
+        id: uuid(), contextId, type: kind,
+        content: `${toolName}: ${JSON.stringify(event.data.arguments ?? '')}`,
         timestamp: Date.now(),
-        metadata: { command: event.data.toolName },
+        metadata: { command: toolName },
       });
       break;
+    }
 
     case 'tool.execution_complete':
       onEvent({
-        id: uuid(), contextId, type: 'output',
+        id: uuid(), contextId, type: 'command_output',
         content: event.data.result?.content ?? event.data.error?.message ?? '',
         timestamp: Date.now(),
       });
@@ -252,4 +256,13 @@ function mapSessionEvent(
     default:
       break;
   }
+}
+
+/** Classify a Copilot tool name into a granular event kind. */
+function classifyToolKind(toolName: string): AgentEventType {
+  const name = toolName.toLowerCase();
+  if (name.includes('read') || name.includes('cat') || name.includes('grep')) return 'file_read';
+  if (name.includes('write') || name.includes('edit') || name.includes('patch') || name.includes('insert')) return 'file_write';
+  if (name.includes('bash') || name.includes('shell') || name.includes('exec') || name.includes('run')) return 'command';
+  return 'command';
 }

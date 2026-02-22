@@ -29,6 +29,7 @@ export { CopilotProvider } from './providers/copilot.js';
 export { ClaudeProvider } from './providers/claude.js';
 export { CodexProvider } from './providers/codex.js';
 export { detectAgents } from './providers/detection.js';
+export { ProgressAggregator } from './providers/progress.js';
 
 // WebSocket utilities
 export { createHeartbeat, broadcast, createWSServer } from './ws/server.js';
