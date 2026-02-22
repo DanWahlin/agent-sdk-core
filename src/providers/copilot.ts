@@ -133,9 +133,18 @@ export class CopilotProvider implements AgentProvider {
       ...(hooks ? { hooks } : {}),
     };
 
-    const session: CopilotSession = config.resumeSessionId
-      ? await this.client.resumeSession(config.resumeSessionId, sessionConfig)
-      : await this.client.createSession(sessionConfig);
+    let session: CopilotSession;
+    if (config.resumeSessionId) {
+      try {
+        session = await this.client.resumeSession(config.resumeSessionId, sessionConfig);
+      } catch {
+        // Session expired or not found — fall back to new session
+        console.log('[copilot-provider] resume failed, creating new session');
+        session = await this.client.createSession(sessionConfig);
+      }
+    } else {
+      session = await this.client.createSession(sessionConfig);
+    }
 
     let unsubscribe: (() => void) | null = null;
     let lastSessionError: string | undefined;

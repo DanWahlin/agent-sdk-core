@@ -53,9 +53,17 @@ export class CodexProvider implements AgentProvider {
       sandboxMode: 'workspace-write' as const,
     };
 
-    const thread = config.resumeSessionId
-      ? this.codex.resumeThread(config.resumeSessionId, threadOptions)
-      : this.codex.startThread(threadOptions);
+    let thread;
+    if (config.resumeSessionId) {
+      try {
+        thread = this.codex.resumeThread(config.resumeSessionId, threadOptions);
+      } catch {
+        console.log('[codex-provider] resume failed, starting new thread');
+        thread = this.codex.startThread(threadOptions);
+      }
+    } else {
+      thread = this.codex.startThread(threadOptions);
+    }
 
     let abortController: AbortController | null = null;
     const tempFiles: string[] = [];
