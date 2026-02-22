@@ -5,13 +5,13 @@ import {
   type SessionEvent,
 } from '@github/copilot-sdk';
 import type { AgentType } from '../types/agents.js';
-import type { AgentEventType } from '../types/events.js';
 import type {
   AgentProvider,
   AgentSession,
   AgentSessionConfig,
   AgentResult,
 } from '../types/providers.js';
+import { classifyToolKind } from './tool-classification.js';
 
 export interface CopilotProviderOptions {
   model?: string;
@@ -256,13 +256,4 @@ function mapSessionEvent(
     default:
       break;
   }
-}
-
-/** Classify a Copilot tool name into a granular event kind. */
-function classifyToolKind(toolName: string): AgentEventType {
-  const name = toolName.toLowerCase();
-  if (name.includes('read') || name.includes('cat') || name.includes('grep')) return 'file_read';
-  if (name.includes('write') || name.includes('edit') || name.includes('patch') || name.includes('insert')) return 'file_write';
-  if (name.includes('bash') || name.includes('shell') || name.includes('exec') || name.includes('run')) return 'command';
-  return 'command';
 }

@@ -1,7 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentType } from '../types/agents.js';
-import type { AgentEventType } from '../types/events.js';
 import type {
   AgentProvider,
   AgentSession,
@@ -9,6 +8,7 @@ import type {
   AgentResult,
   AgentAttachment,
 } from '../types/providers.js';
+import { classifyToolKind } from './tool-classification.js';
 
 export interface ClaudeProviderOptions {
   model?: string;
@@ -129,7 +129,7 @@ export class ClaudeProvider implements AgentProvider {
 
           case 'tool_progress': {
             const toolName = message.tool_name;
-            const kind = classifyClaudeToolKind(toolName);
+            const kind = classifyToolKind(toolName);
             onEvent({
               id: uuid(), contextId, type: kind,
               content: `Tool: ${toolName}`,
@@ -233,13 +233,4 @@ async function* createMessageGenerator(content: ContentBlock[]): AsyncGenerator<
     parent_tool_use_id: null,
     session_id: '',
   };
-}
-
-/** Classify a Claude tool name into a granular event kind. */
-function classifyClaudeToolKind(toolName: string | undefined): AgentEventType {
-  if (!toolName) return 'command';
-  if (toolName === 'Read' || toolName === 'View') return 'file_read';
-  if (toolName === 'Write' || toolName === 'Edit' || toolName === 'MultiEdit') return 'file_write';
-  if (toolName === 'Bash') return 'command';
-  return 'command';
 }

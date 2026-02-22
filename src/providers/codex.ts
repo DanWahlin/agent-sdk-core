@@ -8,7 +8,8 @@ import type {
   AgentResult,
   AgentAttachment,
 } from '../types/providers.js';
-import { writeFile } from 'fs/promises';
+import { getToolDisplayName } from './tool-classification.js';
+import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -56,6 +57,7 @@ export class CodexProvider implements AgentProvider {
       : this.codex.startThread(threadOptions);
 
     let abortController: AbortController | null = null;
+    const tempFiles: string[] = [];
 
     async function buildInput(text: string, attachments?: AgentAttachment[]): Promise<CodexInput[]> {
       const input: CodexInput[] = [];
@@ -65,6 +67,7 @@ export class CodexProvider implements AgentProvider {
             const ext = att.mediaType.split('/')[1] || 'png';
             const tempPath = join(tmpdir(), `agent-sdk-${randomUUID()}.${ext}`);
             await writeFile(tempPath, Buffer.from(att.data, 'base64'), { mode: 0o600 });
+            tempFiles.push(tempPath);
             if (att.displayName) {
               input.push({ type: 'text', text: `[${att.displayName}]` });
             }
@@ -81,8 +84,23 @@ export class CodexProvider implements AgentProvider {
       return input;
     }
 
+    // Codex SDK event shape (typed loosely since the SDK doesn't export the event type)
+    interface CodexStreamEvent {
+      type: string;
+      item?: {
+        type: string;
+        text?: string;
+        command?: string;
+        tool?: string;
+        aggregated_output?: string;
+        changes?: Array<{ kind: string; path: string }>;
+      };
+      error?: { message?: string };
+      message?: string;
+    }
+
     async function processEvents(
-      events: AsyncIterable<any>,
+      events: AsyncIterable<CodexStreamEvent>,
       contextId: string,
       onEvent: AgentSessionConfig['onEvent'],
       signal: AbortSignal | undefined,
@@ -110,27 +128,27 @@ export class CodexProvider implements AgentProvider {
                 case 'agent_message':
                   onEvent({
                     id: uuid(), contextId, type: 'output',
-                    content: event.item.text + '\n',
+                    content: (event.item.text || '') + '\n',
                     timestamp: Date.now(),
                   });
                   break;
                 case 'reasoning':
                   onEvent({
                     id: uuid(), contextId, type: 'thinking',
-                    content: event.item.text,
+                    content: event.item.text || '',
                     timestamp: Date.now(),
                   });
                   break;
                 case 'command_execution':
                   onEvent({
                     id: uuid(), contextId, type: 'command',
-                    content: `$ ${event.item.command}`,
+                    content: `$ ${event.item.command || ''}`,
                     timestamp: Date.now(),
                     metadata: { command: event.item.command },
                   });
                   onEvent({
                     id: uuid(), contextId, type: 'command_output',
-                    content: event.item.aggregated_output,
+                    content: event.item.aggregated_output || '',
                     timestamp: Date.now(),
                   });
                   break;
@@ -228,26 +246,14 @@ export class CodexProvider implements AgentProvider {
           abortController.abort();
           abortController = null;
         }
+        // Clean up temp files created for image attachments
+        for (const f of tempFiles) {
+          try { await unlink(f); } catch { /* ignore missing files */ }
+        }
+        tempFiles.length = 0;
       },
     };
 
     return agentSession;
-  }
-}
-
-function getToolDisplayName(item: { type: string; command?: string; tool?: string }): string {
-  switch (item.type) {
-    case 'command_execution':
-      return `Running: ${item.command?.split(' ')[0] || 'command'}`;
-    case 'file_change':
-      return 'Editing files';
-    case 'reasoning':
-      return 'Thinking...';
-    case 'mcp_tool_call':
-      return `MCP: ${item.tool || 'tool'}`;
-    case 'web_search':
-      return 'Searching the web';
-    default:
-      return item.type;
   }
 }
