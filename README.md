@@ -32,6 +32,19 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 - **Tool Classification** — Shared `classifyToolKind()` maps SDK tool names to granular event types across all providers
 - **Peer Dependencies** — SDKs are optional peer deps — install only the agents you use
 
+## How to use it
+
+1. **Install the package** and whichever SDK peer dependencies you need (`@github/copilot-sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`)
+2. **Detect available agents** — call `detectAgents()` at startup to discover which CLIs are installed on the system
+3. **Create a provider** — instantiate `CopilotProvider`, `ClaudeProvider`, or `CodexProvider` with optional model config, then call `provider.start()`
+4. **Create a session** — call `provider.createSession()` with a `contextId`, `workingDirectory`, `systemPrompt`, and an `onEvent` callback that receives the unified `AgentEvent` stream
+5. **Execute a prompt** — call `session.execute(prompt)` which streams events through your callback as the agent works (thinking, file reads/writes, commands, output, etc.)
+6. **Handle events** — your `onEvent` callback receives typed `AgentEvent` objects that you route to your UI — render them in a panel, accumulate as text, broadcast via WebSocket, whatever your app needs
+7. **Optionally send follow-ups** — call `session.send(message)` to continue the conversation without creating a new session
+8. **Optionally use ProgressAggregator** — feed events into it to get batched TTS-friendly summaries like "Modified 3 files, all tests passing"
+9. **Optionally use WSClient/createWSServer** — set up WebSocket infrastructure with built-in heartbeat, reconnection, and message queuing
+10. **Clean up** — call `session.destroy()` then `provider.stop()` when done
+
 ## Installation
 
 ```bash
