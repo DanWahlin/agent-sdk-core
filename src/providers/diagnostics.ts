@@ -1,5 +1,4 @@
 import { userInfo } from 'os';
-import { accessSync, constants } from 'fs';
 
 interface DiagnosticResult {
   message: string;
@@ -9,12 +8,18 @@ interface DiagnosticResult {
 /**
  * Enrich an agent error message with diagnostic context and actionable fixes.
  * Called by providers when an SDK error occurs.
+ *
+ * Set `redactPaths: true` in production/multi-tenant environments to avoid
+ * leaking filesystem paths in error messages.
  */
 export function diagnoseError(
   agentName: string,
   error: string,
   workingDirectory?: string,
+  options?: { redactPaths?: boolean },
 ): DiagnosticResult {
+  const redact = options?.redactPaths ?? false;
+  const dirLabel = redact ? '<project-directory>' : (workingDirectory || '<project-directory>');
   const lower = error.toLowerCase();
 
   // Claude Code: process exit code 1 when running as root
@@ -31,22 +36,20 @@ export function diagnoseError(
 
   // Permission denied / EACCES errors
   if (lower.includes('permission denied') || lower.includes('eacces')) {
-    const dirInfo = workingDirectory ? ` Check ownership of: ${workingDirectory}` : '';
     return {
       message: error,
-      suggestion: `The agent lacks file system permissions.${dirInfo} ` +
-        `Fix with: chown -R $(whoami) <project-directory>`,
+      suggestion: `The agent lacks file system permissions. Check ownership of: ${dirLabel}. ` +
+        `Fix with: chown -R $(whoami) ${dirLabel}`,
     };
   }
 
   // Write permissions — agent reports it can't write
   if (lower.includes('don\'t have write') || lower.includes('cannot write') || lower.includes('read-only')) {
-    const dirInfo = workingDirectory ? ` for: ${workingDirectory}` : '';
     return {
       message: error,
-      suggestion: `The project directory is not writable by the agent process${dirInfo}. ` +
+      suggestion: `The project directory is not writable by the agent process: ${dirLabel}. ` +
         `If using a custom spawn user, ensure that user owns the project files: ` +
-        `chown -R <agent-user> <project-directory>`,
+        `chown -R <agent-user> ${dirLabel}`,
     };
   }
 

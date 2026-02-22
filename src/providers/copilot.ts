@@ -13,6 +13,7 @@ import type {
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { isPathWithinBoundary } from './validation.js';
 
 export interface CopilotProviderOptions {
   model?: string;
@@ -82,8 +83,14 @@ export class CopilotProvider implements AgentProvider {
 
             function rewriteValue(val: unknown): unknown {
               if (typeof val === 'string' && val.includes(repoPath!)) {
+                const rewritten = val.replaceAll(repoPath!, worktreePath!);
+                // Validate rewritten path stays within worktree boundary
+                if (rewritten.includes('..') && !isPathWithinBoundary(rewritten, worktreePath!)) {
+                  console.warn(`[copilot-provider] blocked path traversal: ${rewritten}`);
+                  return val; // Return original, don't rewrite
+                }
                 changed = true;
-                return val.replaceAll(repoPath!, worktreePath!);
+                return rewritten;
               }
               if (Array.isArray(val)) return val.map(rewriteValue);
               if (val && typeof val === 'object') {
@@ -116,9 +123,16 @@ export class CopilotProvider implements AgentProvider {
       return { kind: 'approved' as const };
     };
 
-    // Build attachments from config
+    // Build attachments from config — validate paths are within working directory
     const sdkAttachments = config.attachments
       ?.filter(a => a.type === 'file' && a.path)
+      .filter(a => {
+        if (!isPathWithinBoundary(a.path!, config.workingDirectory)) {
+          console.warn(`[copilot-provider] blocked attachment outside working directory: ${a.path}`);
+          return false;
+        }
+        return true;
+      })
       .map(a => ({ type: 'file' as const, path: a.path!, displayName: a.displayName }));
 
     const sessionConfig = {

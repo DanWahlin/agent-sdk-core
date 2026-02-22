@@ -102,9 +102,11 @@ export class WSClient {
 
     this.ws.onmessage = (e: MessageEvent) => {
       try {
-        const msg = JSON.parse(typeof e.data === 'string' ? e.data : String(e.data));
-        if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
-        this.listeners.forEach((fn) => fn(msg));
+        const raw = JSON.parse(typeof e.data === 'string' ? e.data : String(e.data));
+        if (!raw || typeof raw !== 'object' || typeof raw.type !== 'string') return;
+        // Prototype pollution protection
+        if ('__proto__' in raw || 'constructor' in raw || 'prototype' in raw) return;
+        this.listeners.forEach((fn) => fn(raw));
       } catch { /* ignore malformed */ }
     };
 
@@ -124,7 +126,10 @@ export class WSClient {
   private scheduleReconnect(): void {
     if (this.maxAttempts > 0 && this.attempts >= this.maxAttempts) return;
 
-    const delay = Math.min(1000 * Math.pow(2, this.attempts), this.maxBackoffMs);
+    // Exponential backoff with jitter to prevent thundering herd
+    const base = Math.min(1000 * Math.pow(2, this.attempts), this.maxBackoffMs);
+    const jitter = base * (0.7 + Math.random() * 0.6);
+    const delay = Math.min(jitter, this.maxBackoffMs);
     this.attempts++;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

@@ -11,6 +11,7 @@ import type {
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { getSafeExtension, isAttachmentSizeValid } from './validation.js';
 
 export interface ClaudeProviderOptions {
   model?: string;
@@ -66,6 +67,14 @@ export class ClaudeProvider implements AgentProvider {
       if (attachments) {
         for (const att of attachments) {
           if (att.type === 'base64_image' && att.data && att.mediaType) {
+            if (!getSafeExtension(att.mediaType)) {
+              console.warn(`[claude-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
+              continue;
+            }
+            if (!isAttachmentSizeValid(att.data)) {
+              console.warn(`[claude-provider] rejected oversized attachment (${(att.data.length / 1024 / 1024).toFixed(1)}MB)`);
+              continue;
+            }
             if (att.displayName) {
               content.push({ type: 'text', text: `[${att.displayName}]` });
             }

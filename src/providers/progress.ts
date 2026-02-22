@@ -19,17 +19,24 @@ export class ProgressAggregator {
   private buffer: AgentEvent[] = [];
   private interval: ReturnType<typeof setInterval> | null = null;
   private onSummary: (summary: string, events: AgentEvent[]) => void;
+  private maxBufferSize: number;
 
   constructor(
     onSummary: (summary: string, events: AgentEvent[]) => void,
     intervalMs = 12_000,
+    maxBufferSize = 1000,
   ) {
     this.onSummary = onSummary;
+    this.maxBufferSize = maxBufferSize;
     this.interval = setInterval(() => this.flush(), intervalMs);
   }
 
   push(event: AgentEvent): void {
     this.buffer.push(event);
+    // Prevent unbounded growth — flush early if buffer is full
+    if (this.buffer.length >= this.maxBufferSize) {
+      this.flush();
+    }
   }
 
   flush(): void {
@@ -136,7 +143,8 @@ export class ProgressAggregator {
 
   private extractTestResults(outputs: AgentEvent[]): string | null {
     for (const output of outputs) {
-      const text = output.content;
+      // Truncate to prevent ReDoS on large command output
+      const text = output.content.length > 10_000 ? output.content.substring(0, 10_000) : output.content;
 
       // Jest-style: "Tests: X passed, Y total"
       let match = text.match(/Tests?:\s*(\d+)\s*passed.*?(\d+)\s*total/i);

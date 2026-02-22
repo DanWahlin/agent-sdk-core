@@ -10,6 +10,7 @@ import type {
 } from '../types/providers.js';
 import { getToolDisplayName } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -73,7 +74,17 @@ export class CodexProvider implements AgentProvider {
       if (attachments) {
         for (const att of attachments) {
           if (att.type === 'base64_image' && att.data && att.mediaType) {
-            const ext = att.mediaType.split('/')[1] || 'png';
+            // Validate MIME type
+            const ext = getSafeExtension(att.mediaType);
+            if (!ext) {
+              console.warn(`[codex-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
+              continue;
+            }
+            // Validate size
+            if (!isAttachmentSizeValid(att.data)) {
+              console.warn(`[codex-provider] rejected oversized attachment (${(att.data.length / 1024 / 1024).toFixed(1)}MB)`);
+              continue;
+            }
             const tempPath = join(tmpdir(), `agent-sdk-${randomUUID()}.${ext}`);
             await writeFile(tempPath, Buffer.from(att.data, 'base64'), { mode: 0o600 });
             tempFiles.push(tempPath);
@@ -82,6 +93,11 @@ export class CodexProvider implements AgentProvider {
             }
             input.push({ type: 'local_image', path: tempPath });
           } else if (att.type === 'local_image' && att.path) {
+            // Validate path is within working directory
+            if (!isPathWithinBoundary(att.path, config.workingDirectory)) {
+              console.warn(`[codex-provider] blocked attachment outside working directory: ${att.path}`);
+              continue;
+            }
             if (att.displayName) {
               input.push({ type: 'text', text: `[${att.displayName}]` });
             }
