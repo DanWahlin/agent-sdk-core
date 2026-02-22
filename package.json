@@ -27,9 +27,9 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --test --experimental-strip-types tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/ws-client.test.ts tests/ws-server.test.ts",
-    "test:e2e": "node --test --experimental-strip-types tests/e2e.test.ts",
-    "test:all": "node --test --experimental-strip-types tests/**/*.test.ts"
+    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/ws-client.test.ts tests/ws-server.test.ts",
+    "test:e2e": "node --import tsx/esm --test tests/e2e.test.ts",
+    "test:all": "node --import tsx/esm --test tests/*.test.ts"
   },
   "files": [
     "dist",
@@ -64,6 +64,7 @@
     "@openai/codex-sdk": "^0.104.0",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
+    "tsx": "^4.21.0",
     "typescript": "~5.7.0",
     "ws": "^8.19.0"
   },
