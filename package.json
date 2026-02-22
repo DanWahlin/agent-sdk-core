@@ -1,5 +1,5 @@
 {
-  "name": "@agent-sdk/core",
+  "name": "@codewithdan/agent-sdk-core",
   "version": "0.1.0",
   "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex)",
   "type": "module",
