@@ -2,7 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { WSClient } from '../src/ws/client.ts';
 
-describe('WSClient', () => {
+// WSClient uses global WebSocket (available in Node 21+, all modern browsers)
+const hasGlobalWebSocket = typeof globalThis.WebSocket !== 'undefined';
+
+describe('WSClient', { skip: !hasGlobalWebSocket && 'No global WebSocket (Node < 21)' }, () => {
   it('should construct with default options', () => {
     const client = new WSClient({ url: 'ws://localhost:9999/ws' });
     assert.equal(client.connected, false);
