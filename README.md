@@ -1,10 +1,10 @@
-# @codewithdan/agent-sdk-core
+# Agent SDK Core
 
 <p align="center">
   <img src="logo.png" alt="agent-sdk-core logo" width="400">
 </p>
 
-## What is this?
+## What is agent-sdk-core?
 
 A shared TypeScript package that provides a unified interface for working with AI coding agent SDKs — GitHub Copilot, Claude Code, and OpenAI Codex. Instead of writing separate integration code for each SDK in every project, this package gives you one consistent API for creating agent sessions, streaming events, and managing connections.
 
