@@ -27,7 +27,7 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "test": "node --test --experimental-strip-types tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/ws-client.test.ts tests/ws-server.test.ts",
     "test:e2e": "node --test --experimental-strip-types tests/e2e.test.ts",
     "test:all": "node --test --experimental-strip-types tests/**/*.test.ts"
   },
