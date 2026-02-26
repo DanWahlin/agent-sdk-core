@@ -1,4 +1,4 @@
-export type AgentType = 'copilot' | 'claude' | 'codex';
+export type AgentType = 'copilot' | 'claude' | 'codex' | 'opencode';
 export type AgentStatus = 'idle' | 'planning' | 'executing' | 'complete' | 'failed';
 
 export interface AgentInfo {

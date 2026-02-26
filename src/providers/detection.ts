@@ -20,10 +20,11 @@ async function checkCLI(command: string): Promise<{ installed: boolean; version?
 }
 
 export async function detectAgents(): Promise<AgentInfo[]> {
-  const [copilotCheck, claudeCheck, codexCheck] = await Promise.all([
+  const [copilotCheck, claudeCheck, codexCheck, opencodeCheck] = await Promise.all([
     checkCLI('copilot'),
     checkCLI('claude'),
     checkCLI('codex'),
+    checkCLI('opencode'),
   ]);
 
   const agents: AgentInfo[] = [];
@@ -61,6 +62,14 @@ export async function detectAgents(): Promise<AgentInfo[]> {
       reason: 'Codex CLI not found in PATH',
     });
   }
+
+  agents.push({
+    name: 'opencode',
+    displayName: 'OpenCode',
+    available: opencodeCheck.installed,
+    version: opencodeCheck.version,
+    reason: opencodeCheck.installed ? undefined : 'OpenCode CLI not found in PATH',
+  });
 
   return agents;
 }

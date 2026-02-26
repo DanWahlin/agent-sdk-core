@@ -19,21 +19,30 @@ agent-sdk-core/
 │   │   ├── copilot.ts        # CopilotProvider — @github/copilot-sdk wrapper
 │   │   ├── claude.ts         # ClaudeProvider — @anthropic-ai/claude-agent-sdk wrapper
 │   │   ├── codex.ts          # CodexProvider — @openai/codex-sdk wrapper
+│   │   ├── opencode.ts       # OpenCodeProvider — @opencode-ai/sdk wrapper (HTTP client/server)
 │   │   ├── detection.ts      # detectAgents() — CLI availability check
 │   │   └── progress.ts       # ProgressAggregator — TTS-friendly event summarizer
 │   └── ws/
 │       ├── server.ts         # createWSServer(), createHeartbeat(), broadcast()
 │       └── client.ts         # WSClient — reconnect, backoff, message queue
 └── tests/
-    ├── types.test.ts         # Event types, WSMessage, AgentSessionConfig tests
-    └── ws-client.test.ts     # WSClient unit tests
+    ├── types.test.ts              # Event types, WSMessage, AgentSessionConfig tests
+    ├── opencode.test.ts           # OpenCode event mapping + provider tests
+    ├── tool-classification.test.ts
+    ├── progress.test.ts
+    ├── validation.test.ts
+    ├── diagnostics.test.ts
+    ├── ws-client.test.ts          # WSClient unit tests
+    ├── ws-server.test.ts
+    ├── ws-security.test.ts
+    └── e2e.test.ts                # Real-world tests against all 4 providers
 ```
 
 ## Key Design Decisions
 
 - **Generic `contextId`** — not `taskId` or `runId`. Each consumer maps to its own domain concept.
 - **Generic `WSMessage<T>`** — typed envelope. Each consumer defines its own message vocabulary.
-- **10 granular event types** — superset covering all three consumer needs: `thinking`, `output`, `command`, `command_output`, `file_read`, `file_write`, `file_edit`, `tool_call`, `test_result`, `error`, `complete`.
+- **10 granular event types** — superset covering all four consumer needs: `thinking`, `output`, `command`, `command_output`, `file_read`, `file_write`, `file_edit`, `tool_call`, `test_result`, `error`, `complete`.
 - **All SDK features opt-in** — resume, attachments, hooks, ProgressAggregator are optional.
 - **Peer dependencies** — SDKs are optional peer deps. Install only the agents you use.
 
@@ -50,7 +59,8 @@ agent-sdk-core/
 ```bash
 npm install
 npm run build    # tsc -b → dist/
-npm test         # node --test (14 tests)
+npm test         # node --test (104 unit tests)
+npm run test:e2e # real-world tests against all 4 providers (24 tests)
 ```
 
 ## Code Patterns
@@ -58,5 +68,6 @@ npm test         # node --test (14 tests)
 - **Provider pattern**: `AgentProvider` creates `AgentSession`s via `createSession()`. Each session has `execute()`, `send()`, `abort()`, `destroy()`.
 - **Event callback**: Providers call `config.onEvent(event)` for every SDK event, mapping to unified `AgentEvent`.
 - **Tool classification**: `classifyToolKind()` maps SDK tool names to granular event types (`file_read`, `file_write`, `command`, etc.).
+- **OpenCode HTTP model**: Unlike Copilot/Claude/Codex which wrap CLI processes, OpenCode uses an HTTP client/server with REST sessions and SSE events. Model specified as `providerID/modelID` (e.g., `anthropic/claude-sonnet-4-20250514`).
 - **ProgressAggregator**: Batches events over interval, groups by kind, produces TTS summaries ("Reading 3 files", "All tests passing").
 - **WSClient**: Exponential backoff (1s→30s), FIFO message queue (max 10), auto-cleanup on last unsubscribe.

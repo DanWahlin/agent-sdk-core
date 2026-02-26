@@ -6,7 +6,7 @@
 
 ## What is agent-sdk-core?
 
-A shared TypeScript package that provides a unified interface for working with AI coding agent SDKs — GitHub Copilot, Claude Code, and OpenAI Codex. Instead of writing separate integration code for each SDK in every project, this package gives you one consistent API for creating agent sessions, streaming events, and managing connections.
+A shared TypeScript package that provides a unified interface for working with AI coding agent SDKs — GitHub Copilot, Claude Code, OpenAI Codex, and OpenCode. Instead of writing separate integration code for each SDK in every project, this package gives you one consistent API for creating agent sessions, streaming events, and managing connections.
 
 ## Why use it?
 
@@ -14,8 +14,9 @@ Each AI coding agent SDK has its own API patterns:
 - **Copilot** uses event subscriptions with `session.on(callback)` + `sendAndWait()`
 - **Claude Code** uses async generators with `for await (const msg of query(...))`
 - **Codex** uses threaded streams with `thread.runStreamed()`
+- **OpenCode** uses an HTTP client/server model with REST sessions + SSE event streaming
 
-This package normalizes all three into a single `AgentProvider` / `AgentSession` interface with a unified `AgentEvent` stream. You write your event handling once, and it works with any agent.
+This package normalizes all four into a single `AgentProvider` / `AgentSession` interface with a unified `AgentEvent` stream. You write your event handling once, and it works with any agent.
 
 It also provides optional utilities that most agent-powered apps need: WebSocket server/client helpers with heartbeat and reconnection, a progress aggregator for TTS-friendly summaries, and agent CLI detection.
 
@@ -23,9 +24,9 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 
 ## Features
 
-- **Unified Provider Interface** — Single `AgentProvider`/`AgentSession` API that works identically across Copilot, Claude Code, and Codex SDKs
+- **Unified Provider Interface** — Single `AgentProvider`/`AgentSession` API that works identically across Copilot, Claude Code, Codex, and OpenCode SDKs
 - **Rich Event Stream** — 10 granular `AgentEvent` types (thinking, output, command, command_output, file_read, file_write, file_edit, tool_call, test_result, error, complete) with metadata for files, diffs, commands, and test results
-- **Session Resume** — Continue previous agent sessions via `resumeSessionId` (Copilot `resumeSession()`, Codex `resumeThread()`, Claude `resume` option)
+- **Session Resume** — Continue previous agent sessions via `resumeSessionId` (Copilot `resumeSession()`, Codex `resumeThread()`, Claude `resume` option, OpenCode `session.get()`)
 - **Image/Attachment Support** — Pass screenshots and files to agents via a unified `AgentAttachment` type — each provider handles the SDK-specific format
 - **Middleware Hooks** — Inject `onPreToolUse` (e.g., worktree path rewriting) and `onPermissionRequest` (e.g., tool deny-lists) without modifying provider code
 - **Agent Detection** — `detectAgents()` checks which CLI tools are installed and available on the system
@@ -38,9 +39,9 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 
 ## How to use it
 
-1. **Install the package** and whichever SDK peer dependencies you need (`@github/copilot-sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`)
+1. **Install the package** and whichever SDK peer dependencies you need (`@github/copilot-sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, `@opencode-ai/sdk`)
 2. **Detect available agents** — call `detectAgents()` at startup to discover which CLIs are installed on the system
-3. **Create a provider** — instantiate `CopilotProvider`, `ClaudeProvider`, or `CodexProvider` with optional model config, then call `provider.start()`
+3. **Create a provider** — instantiate `CopilotProvider`, `ClaudeProvider`, `CodexProvider`, or `OpenCodeProvider` with optional model config, then call `provider.start()`
 4. **Create a session** — call `provider.createSession()` with a `contextId`, `workingDirectory`, `systemPrompt`, and an `onEvent` callback that receives the unified `AgentEvent` stream
 5. **Execute a prompt** — call `session.execute(prompt)` which streams events through your callback as the agent works (thinking, file reads/writes, commands, output, etc.)
 6. **Handle events** — your `onEvent` callback receives typed `AgentEvent` objects that you route to your UI — render them in a panel, accumulate as text, broadcast via WebSocket, whatever your app needs
@@ -66,6 +67,9 @@ npm install @anthropic-ai/claude-agent-sdk
 
 # For Codex
 npm install @openai/codex-sdk
+
+# For OpenCode
+npm install @opencode-ai/sdk
 ```
 
 ## Quick Start
@@ -103,7 +107,7 @@ await provider.stop();
 ```
 @codewithdan/agent-sdk-core
 ├── types/          # Event types, provider interfaces, WS message envelope
-├── providers/      # Copilot, Claude, Codex providers + detection + ProgressAggregator
+├── providers/      # Copilot, Claude, Codex, OpenCode providers + detection + ProgressAggregator
 └── ws/             # WebSocket server and client utilities
 ```
 
@@ -154,7 +158,7 @@ interface AgentEvent {
     file?: string;
     command?: string;
     diff?: string;
-    agentType?: 'copilot' | 'claude' | 'codex';
+    agentType?: 'copilot' | 'claude' | 'codex' | 'opencode';
     duration?: number;
     error?: string;
     testsPassing?: number;
@@ -195,6 +199,25 @@ const provider = new CodexProvider({
 ```
 
 Features: thread-based sessions, thread resume, local image input, structured file change events, AbortController.
+
+### OpenCodeProvider
+
+```typescript
+const provider = new OpenCodeProvider({
+  model: 'anthropic/claude-sonnet-4-20250514',  // optional, defaults to env OPENCODE_MODEL
+  baseUrl: 'http://localhost:4096',              // optional, connect to existing server
+  hostname: '127.0.0.1',                         // optional, for embedded server
+  port: 4096,                                    // optional, for embedded server
+});
+```
+
+The `model` option uses a `providerID/modelID` format (e.g., `anthropic/claude-sonnet-4-20250514`, `openai/gpt-4o`). This matches OpenCode's native model identifier format.
+
+**Modes:**
+- **Embedded server** (default) — `start()` launches an OpenCode server process and connects a client to it. Best for self-contained usage.
+- **Connect to existing** — pass `baseUrl` to connect to an already-running `opencode serve` instance. Useful for shared or long-lived servers.
+
+Features: HTTP client/server architecture, REST session management, real-time SSE event streaming, session resume, system prompt injection, structured error reporting.
 
 ### Session Config
 
@@ -300,12 +323,18 @@ interface WSMessage<T = unknown> {
 | `COPILOT_DENIED_TOOLS` | _(none)_ | CopilotProvider |
 | `CLAUDE_MODEL` | `claude-opus-4-20250514` | ClaudeProvider |
 | `CODEX_MODEL` | `gpt-5.2-codex` | CodexProvider |
+| `OPENCODE_MODEL` | `anthropic/claude-sonnet-4-20250514` | OpenCodeProvider |
+
+Model environment variables can also be set via the provider constructor's `model` option. The constructor value takes precedence over the environment variable. For OpenCode, the model must be in `providerID/modelID` format (e.g., `anthropic/claude-sonnet-4-20250514` or `openai/gpt-4o`).
 
 ## Tests
 
 ```bash
-npm test
+npm test          # 104 unit tests (types, event mapping, WS, validation, diagnostics)
+npm run test:e2e  # 24 e2e tests — real prompts against all 4 providers (requires CLIs installed)
 ```
+
+The e2e suite runs 6 identical scenarios against each provider: stream events, multiple concurrent sessions, session resume, abort, follow-up messages, and clean shutdown.
 
 ## License
 

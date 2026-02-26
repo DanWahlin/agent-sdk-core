@@ -1,7 +1,7 @@
 {
   "name": "@codewithdan/agent-sdk-core",
   "version": "0.2.0",
-  "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex)",
+  "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex, OpenCode)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -27,7 +27,7 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts",
+    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts",
     "test:e2e": "node --import tsx/esm --test tests/e2e.test.ts",
     "test:all": "node --import tsx/esm --test tests/*.test.ts"
   },
@@ -39,6 +39,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.0",
     "@github/copilot-sdk": "^0.1.0",
     "@openai/codex-sdk": ">=0.80.0",
+    "@opencode-ai/sdk": "^1.0.0",
     "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
@@ -49,6 +50,9 @@
       "optional": true
     },
     "@openai/codex-sdk": {
+      "optional": true
+    },
+    "@opencode-ai/sdk": {
       "optional": true
     },
     "ws": {
@@ -62,6 +66,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.50",
     "@github/copilot-sdk": "^0.1.25",
     "@openai/codex-sdk": "^0.104.0",
+    "@opencode-ai/sdk": "^1.2.14",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.21.0",

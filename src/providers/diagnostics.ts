@@ -71,6 +71,15 @@ export function diagnoseError(
     };
   }
 
+  // OpenCode: server connection refused
+  if (agentName === 'opencode' && (lower.includes('econnrefused') || lower.includes('fetch failed'))) {
+    return {
+      message: error,
+      suggestion: 'The OpenCode server is not running or not reachable. ' +
+        'Start it with: opencode serve --port 4096, or check your hostname/port configuration.',
+    };
+  }
+
   // No enrichment needed
   return { message: error };
 }
