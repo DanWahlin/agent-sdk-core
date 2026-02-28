@@ -191,12 +191,25 @@ export class CopilotProvider implements AgentProvider {
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           const diag = formatDiagnostic(diagnoseError('copilot', message, config.workingDirectory));
+          config.onEvent({
+            id: uuid(), contextId: config.contextId, type: 'error',
+            content: `Copilot SDK error: ${diag}`, timestamp: Date.now(),
+          });
           return { status: 'failed', error: diag };
         }
       },
 
       async send(message: string): Promise<void> {
-        await session.sendAndWait({ prompt: message }, 2_147_483_647); // no timeout
+        try {
+          await session.sendAndWait({ prompt: message }, 2_147_483_647); // no timeout
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const diag = formatDiagnostic(diagnoseError('copilot', msg, config.workingDirectory));
+          config.onEvent({
+            id: uuid(), contextId: config.contextId, type: 'error',
+            content: `Copilot SDK error: ${diag}`, timestamp: Date.now(),
+          });
+        }
       },
 
       async abort(): Promise<void> {

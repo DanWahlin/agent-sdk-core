@@ -35,3 +35,4 @@ export { ProgressAggregator } from './providers/progress.js';
 // WebSocket utilities
 export { createHeartbeat, broadcast, createWSServer } from './ws/server.js';
 export { WSClient } from './ws/client.js';
+export { sanitizeJson } from './ws/sanitize.js';

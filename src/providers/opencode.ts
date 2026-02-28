@@ -101,11 +101,13 @@ export class OpenCodeProvider implements AgentProvider {
       } catch {
         console.log('[opencode-provider] resume failed, creating new session');
         const created = await client.session.create({ body: { title: config.contextId } });
-        sessionId = created.data!.id;
+        if (!created.data) throw new Error('OpenCode session creation returned no data');
+        sessionId = created.data.id;
       }
     } else {
       const created = await client.session.create({ body: { title: config.contextId } });
-      sessionId = created.data!.id;
+      if (!created.data) throw new Error('OpenCode session creation returned no data');
+      sessionId = created.data.id;
     }
 
     // Subscribe to SSE for real-time events
@@ -156,6 +158,10 @@ export class OpenCodeProvider implements AgentProvider {
           if (info && 'error' in info && info.error) {
             const errMsg = extractErrorMessage(info.error);
             const diag = formatDiagnostic(diagnoseError('opencode', errMsg, config.workingDirectory));
+            config.onEvent({
+              id: uuid(), contextId: config.contextId, type: 'error',
+              content: `OpenCode SDK error: ${diag}`, timestamp: Date.now(),
+            });
             return { status: 'failed', error: diag };
           }
 

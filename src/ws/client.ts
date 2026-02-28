@@ -1,4 +1,7 @@
-export type WSClientMessageHandler = (msg: { type: string; payload: unknown }) => void;
+import type { WSMessage } from '../types/messages.js';
+import { sanitizeJson } from './sanitize.js';
+
+export type WSClientMessageHandler = (msg: WSMessage) => void;
 
 export interface WSClientOptions {
   /** WebSocket URL (e.g., 'ws://localhost:3001/ws') */
@@ -104,9 +107,8 @@ export class WSClient {
       try {
         const raw = JSON.parse(typeof e.data === 'string' ? e.data : String(e.data));
         if (!raw || typeof raw !== 'object' || typeof raw.type !== 'string') return;
-        // Prototype pollution protection
-        if ('__proto__' in raw || 'constructor' in raw || 'prototype' in raw) return;
-        this.listeners.forEach((fn) => fn(raw));
+        const sanitized = sanitizeJson(raw) as WSMessage;
+        this.listeners.forEach((fn) => fn(sanitized));
       } catch { /* ignore malformed */ }
     };
 

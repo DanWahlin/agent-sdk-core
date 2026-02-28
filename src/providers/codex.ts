@@ -178,7 +178,7 @@ export class CodexProvider implements AgentProvider {
                   });
                   break;
                 case 'file_change': {
-                  const changes = event.item.changes as Array<{ kind: string; path: string }>;
+                  const changes = (event.item.changes ?? []) as Array<{ kind: string; path: string }>;
                   for (const change of changes) {
                     onEvent({
                       id: uuid(), contextId, type: 'file_write',
@@ -255,9 +255,18 @@ export class CodexProvider implements AgentProvider {
 
       async send(message: string): Promise<void> {
         abortController = new AbortController();
-        const input = await buildInput(message);
-        const { events } = await thread.runStreamed(input);
-        await processEvents(events, config.contextId, config.onEvent, abortController.signal);
+        try {
+          const input = await buildInput(message);
+          const { events } = await thread.runStreamed(input);
+          await processEvents(events, config.contextId, config.onEvent, abortController.signal);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const diag = formatDiagnostic(diagnoseError('codex', msg, config.workingDirectory));
+          config.onEvent({
+            id: uuid(), contextId: config.contextId, type: 'error',
+            content: `Codex SDK error: ${diag}`, timestamp: Date.now(),
+          });
+        }
       },
 
       async abort(): Promise<void> {
