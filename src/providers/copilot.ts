@@ -182,7 +182,7 @@ export class CopilotProvider implements AgentProvider {
           await session.sendAndWait({
             prompt,
             ...(sdkAttachments?.length ? { attachments: sdkAttachments } : {}),
-          });
+          }, 2_147_483_647); // no timeout — agent-manager handles its own AGENT_TIMEOUT_MS
           if (lastSessionError) {
             const diag = formatDiagnostic(diagnoseError('copilot', lastSessionError, config.workingDirectory));
             return { status: 'failed', error: diag };
@@ -196,7 +196,7 @@ export class CopilotProvider implements AgentProvider {
       },
 
       async send(message: string): Promise<void> {
-        await session.sendAndWait({ prompt: message });
+        await session.sendAndWait({ prompt: message }, 2_147_483_647); // no timeout
       },
 
       async abort(): Promise<void> {
