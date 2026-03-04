@@ -27,6 +27,7 @@ agent-sdk-core/
 │       └── client.ts         # WSClient — reconnect, backoff, message queue
 └── tests/
     ├── types.test.ts              # Event types, WSMessage, AgentSessionConfig tests
+    ├── attachments.test.ts        # Per-message attachment tests for all 4 providers
     ├── opencode.test.ts           # OpenCode event mapping + provider tests
     ├── tool-classification.test.ts
     ├── progress.test.ts
@@ -59,14 +60,15 @@ agent-sdk-core/
 ```bash
 npm install
 npm run build    # tsc -b → dist/
-npm test         # node --test (104 unit tests)
+npm test         # node --test (127 unit tests)
 npm run test:e2e # real-world tests against all 4 providers (24 tests)
 ```
 
 ## Code Patterns
 
-- **Provider pattern**: `AgentProvider` creates `AgentSession`s via `createSession()`. Each session has `execute()`, `send()`, `abort()`, `destroy()`.
+- **Provider pattern**: `AgentProvider` creates `AgentSession`s via `createSession()`. Each session has `execute(prompt, attachments?)`, `send(message, attachments?)`, `abort()`, `destroy()`.
 - **Event callback**: Providers call `config.onEvent(event)` for every SDK event, mapping to unified `AgentEvent`.
+- **Attachment handling**: `execute()` and `send()` accept optional per-message `AgentAttachment[]`. Config-level attachments merge with per-call attachments. Copilot bridges `base64_image` → temp files (cleaned up per-request in `finally` blocks). Claude passes native image content blocks. Codex converts to `local_image` temp files. OpenCode warns and ignores.
 - **Tool classification**: `classifyToolKind()` maps SDK tool names to granular event types (`file_read`, `file_write`, `command`, etc.).
 - **OpenCode HTTP model**: Unlike Copilot/Claude/Codex which wrap CLI processes, OpenCode uses an HTTP client/server with REST sessions and SSE events. Model specified as `providerID/modelID` (e.g., `anthropic/claude-sonnet-4-20250514`).
 - **ProgressAggregator**: Batches events over interval, groups by kind, produces TTS summaries ("Reading 3 files", "All tests passing").

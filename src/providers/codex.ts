@@ -233,12 +233,13 @@ export class CodexProvider implements AgentProvider {
         return thread.id;
       },
 
-      async execute(prompt: string): Promise<AgentResult> {
+      async execute(prompt: string, attachments?: AgentAttachment[]): Promise<AgentResult> {
         abortController = new AbortController();
         try {
+          const merged = [...(config.attachments || []), ...(attachments || [])];
           const input = await buildInput(
             `${config.systemPrompt}\n\n${prompt}`,
-            config.attachments,
+            merged.length ? merged : undefined,
           );
           const { events } = await thread.runStreamed(input);
           return await processEvents(events, config.contextId, config.onEvent, abortController.signal);
@@ -253,10 +254,10 @@ export class CodexProvider implements AgentProvider {
         }
       },
 
-      async send(message: string): Promise<void> {
+      async send(message: string, attachments?: AgentAttachment[]): Promise<void> {
         abortController = new AbortController();
         try {
-          const input = await buildInput(message);
+          const input = await buildInput(message, attachments);
           const { events } = await thread.runStreamed(input);
           await processEvents(events, config.contextId, config.onEvent, abortController.signal);
         } catch (err: unknown) {

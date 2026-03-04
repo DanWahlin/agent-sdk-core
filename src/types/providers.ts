@@ -40,9 +40,9 @@ export interface AgentSessionConfig {
 }
 
 export interface AgentSession {
-  execute(prompt: string): Promise<AgentResult>;
+  execute(prompt: string, attachments?: AgentAttachment[]): Promise<AgentResult>;
   /** Send a follow-up message to a running agent session */
-  send(message: string): Promise<void>;
+  send(message: string, attachments?: AgentAttachment[]): Promise<void>;
   abort(): Promise<void>;
   destroy(): Promise<void>;
   readonly sessionId: string | null;

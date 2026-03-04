@@ -98,6 +98,28 @@ describe('AgentSessionConfig', () => {
     assert.equal(config.attachments![0].type, 'base64_image');
   });
 
+  it('should allow execute() and send() with optional attachments parameter', () => {
+    // Verify the interface accepts the optional attachments parameter
+    const session: import('../src/types/providers.js').AgentSession = {
+      sessionId: null,
+      async execute(_prompt: string, _attachments?: import('../src/types/providers.js').AgentAttachment[]) {
+        return { status: 'complete' };
+      },
+      async send(_message: string, _attachments?: import('../src/types/providers.js').AgentAttachment[]) {},
+      async abort() {},
+      async destroy() {},
+    };
+
+    // Calling without attachments still works (backwards-compatible)
+    assert.ok(session.execute('hello'));
+    assert.ok(session.send('hello'));
+
+    // Calling with attachments works
+    const att = [{ type: 'base64_image' as const, data: 'abc', mediaType: 'image/png' }];
+    assert.ok(session.execute('hello', att));
+    assert.ok(session.send('hello', att));
+  });
+
   it('should support optional hooks', () => {
     const hookCalled = { permission: false, preTool: false };
     const config = {

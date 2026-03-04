@@ -1,6 +1,6 @@
 {
   "name": "@codewithdan/agent-sdk-core",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex, OpenCode)",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts",
+    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts tests/attachments.test.ts",
     "test:e2e": "node --import tsx/esm --test tests/e2e.test.ts",
     "test:all": "node --import tsx/esm --test tests/*.test.ts"
   },

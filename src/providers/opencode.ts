@@ -8,6 +8,7 @@ import type {
   AgentSession,
   AgentSessionConfig,
   AgentResult,
+  AgentAttachment,
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
@@ -142,7 +143,10 @@ export class OpenCodeProvider implements AgentProvider {
         return sessionId;
       },
 
-      async execute(prompt: string): Promise<AgentResult> {
+      async execute(prompt: string, attachments?: AgentAttachment[]): Promise<AgentResult> {
+        if (attachments?.length) {
+          console.warn('[opencode-provider] attachments are not supported by OpenCode — they will be ignored');
+        }
         try {
           const result = await client.session.prompt({
             path: { id: sessionId },
@@ -187,7 +191,10 @@ export class OpenCodeProvider implements AgentProvider {
         }
       },
 
-      async send(message: string): Promise<void> {
+      async send(message: string, attachments?: AgentAttachment[]): Promise<void> {
+        if (attachments?.length) {
+          console.warn('[opencode-provider] attachments are not supported by OpenCode — they will be ignored');
+        }
         try {
           const result = await client.session.prompt({
             path: { id: sessionId },

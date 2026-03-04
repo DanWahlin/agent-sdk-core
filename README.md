@@ -27,7 +27,7 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 - **Unified Provider Interface** — Single `AgentProvider`/`AgentSession` API that works identically across Copilot, Claude Code, Codex, and OpenCode SDKs
 - **Rich Event Stream** — 10 granular `AgentEvent` types (thinking, output, command, command_output, file_read, file_write, file_edit, tool_call, test_result, error, complete) with metadata for files, diffs, commands, and test results
 - **Session Resume** — Continue previous agent sessions via `resumeSessionId` (Copilot `resumeSession()`, Codex `resumeThread()`, Claude `resume` option, OpenCode `session.get()`)
-- **Image/Attachment Support** — Pass screenshots and files to agents via a unified `AgentAttachment` type — each provider handles the SDK-specific format
+- **Image/Attachment Support** — Pass screenshots and files to agents via a unified `AgentAttachment` type on both `execute()` and `send()` calls — each provider handles the SDK-specific format (Copilot: base64→temp file bridging, Claude: native image blocks, Codex: local_image input). Config-level attachments merge with per-call attachments.
 - **Middleware Hooks** — Inject `onPreToolUse` (e.g., worktree path rewriting) and `onPermissionRequest` (e.g., tool deny-lists) without modifying provider code
 - **Agent Detection** — `detectAgents()` checks which CLI tools are installed and available on the system
 - **Progress Aggregator** — Batches events over a configurable interval and produces TTS-friendly summaries ("Reading 3 files", "All 5 tests passing")
@@ -45,7 +45,7 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 4. **Create a session** — call `provider.createSession()` with a `contextId`, `workingDirectory`, `systemPrompt`, and an `onEvent` callback that receives the unified `AgentEvent` stream
 5. **Execute a prompt** — call `session.execute(prompt)` which streams events through your callback as the agent works (thinking, file reads/writes, commands, output, etc.)
 6. **Handle events** — your `onEvent` callback receives typed `AgentEvent` objects that you route to your UI — render them in a panel, accumulate as text, broadcast via WebSocket, whatever your app needs
-7. **Optionally send follow-ups** — call `session.send(message)` to continue the conversation without creating a new session
+7. **Optionally send follow-ups** — call `session.send(message)` to continue the conversation without creating a new session. Both `execute()` and `send()` accept an optional `attachments` parameter for per-message images/files.
 8. **Optionally use ProgressAggregator** — feed events into it to get batched TTS-friendly summaries like "Modified 3 files, all tests passing"
 9. **Optionally use WSClient/createWSServer** — set up WebSocket infrastructure with built-in heartbeat, reconnection, and message queuing
 10. **Clean up** — call `session.destroy()` then `provider.stop()` when done
@@ -97,6 +97,11 @@ const session = await provider.createSession({
 
 const result = await session.execute('Fix the failing tests');
 console.log(result.status); // 'complete' or 'failed'
+
+// Send follow-up with an image attachment
+await session.send('Now fix this CSS issue too', [
+  { type: 'base64_image', data: screenshotBase64, mediaType: 'image/png', displayName: 'bug-screenshot.png' },
+]);
 
 await session.destroy();
 await provider.stop();
@@ -178,7 +183,7 @@ const provider = new CopilotProvider({
 });
 ```
 
-Features: streaming events, session resume, file attachments, worktree path rewriting hooks, permission deny-list, spinner filtering.
+Features: streaming events, session resume, file attachments with base64 image bridging (images are converted to temp files for the SDK), worktree path rewriting hooks, permission deny-list, per-request temp file cleanup, spinner filtering.
 
 ### ClaudeProvider
 
@@ -330,7 +335,7 @@ Model environment variables can also be set via the provider constructor's `mode
 ## Tests
 
 ```bash
-npm test          # 104 unit tests (types, event mapping, WS, validation, diagnostics)
+npm test          # 127 unit tests (types, event mapping, WS, validation, diagnostics, attachments)
 npm run test:e2e  # 24 e2e tests — real prompts against all 4 providers (requires CLIs installed)
 ```
 

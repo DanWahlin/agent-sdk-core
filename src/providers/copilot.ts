@@ -1,4 +1,4 @@
-import { v4 as uuid } from 'uuid';
+import { v4 as uuid, v4 as randomUUID } from 'uuid';
 import {
   CopilotClient,
   type CopilotSession,
@@ -10,10 +10,14 @@ import type {
   AgentSession,
   AgentSessionConfig,
   AgentResult,
+  AgentAttachment,
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
-import { isPathWithinBoundary } from './validation.js';
+import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 export interface CopilotProviderOptions {
   model?: string;
@@ -123,18 +127,6 @@ export class CopilotProvider implements AgentProvider {
       return { kind: 'approved' as const };
     };
 
-    // Build attachments from config — validate paths are within working directory
-    const sdkAttachments = config.attachments
-      ?.filter(a => a.type === 'file' && a.path)
-      .filter(a => {
-        if (!isPathWithinBoundary(a.path!, config.workingDirectory)) {
-          console.warn(`[copilot-provider] blocked attachment outside working directory: ${a.path}`);
-          return false;
-        }
-        return true;
-      })
-      .map(a => ({ type: 'file' as const, path: a.path!, displayName: a.displayName }));
-
     const sessionConfig = {
       model: this.model,
       streaming: true,
@@ -163,12 +155,61 @@ export class CopilotProvider implements AgentProvider {
     let unsubscribe: (() => void) | null = null;
     let lastSessionError: string | undefined;
 
+    /** Convert AgentAttachments to Copilot SDK file attachments, bridging images to temp files.
+     *  Returns the SDK attachments and a list of temp file paths created (for per-request cleanup). */
+    async function toCopilotAttachments(
+      attachments: AgentAttachment[] | undefined,
+    ): Promise<{ sdkAttachments: Array<{ type: 'file'; path: string; displayName?: string }>; createdTempFiles: string[] }> {
+      if (!attachments?.length) return { sdkAttachments: [], createdTempFiles: [] };
+      const sdkAttachments: Array<{ type: 'file'; path: string; displayName?: string }> = [];
+      const createdTempFiles: string[] = [];
+
+      for (const att of attachments) {
+        if (att.type === 'file' && att.path) {
+          if (!isPathWithinBoundary(att.path, config.workingDirectory)) {
+            console.warn(`[copilot-provider] blocked attachment outside working directory: ${att.path}`);
+            continue;
+          }
+          sdkAttachments.push({ type: 'file', path: att.path, displayName: att.displayName });
+        } else if (att.type === 'base64_image' && att.data && att.mediaType) {
+          const ext = getSafeExtension(att.mediaType);
+          if (!ext) {
+            console.warn(`[copilot-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
+            continue;
+          }
+          if (!isAttachmentSizeValid(att.data)) {
+            console.warn(`[copilot-provider] rejected oversized attachment (${(att.data.length / 1024 / 1024).toFixed(1)}MB)`);
+            continue;
+          }
+          const tempPath = join(tmpdir(), `agent-sdk-${randomUUID()}.${ext}`);
+          await writeFile(tempPath, Buffer.from(att.data, 'base64'), { mode: 0o600 });
+          createdTempFiles.push(tempPath);
+          sdkAttachments.push({ type: 'file', path: tempPath, displayName: att.displayName });
+        } else if (att.type === 'local_image' && att.path) {
+          if (!isPathWithinBoundary(att.path, config.workingDirectory)) {
+            console.warn(`[copilot-provider] blocked attachment outside working directory: ${att.path}`);
+            continue;
+          }
+          sdkAttachments.push({ type: 'file', path: att.path, displayName: att.displayName });
+        }
+      }
+
+      return { sdkAttachments, createdTempFiles };
+    }
+
+    /** Clean up temp files created for a single request */
+    async function cleanupTempFiles(files: string[]): Promise<void> {
+      for (const f of files) {
+        try { await unlink(f); } catch { /* ignore missing files */ }
+      }
+    }
+
     const agentSession: AgentSession = {
       get sessionId() {
         return session.sessionId ?? null;
       },
 
-      async execute(prompt: string): Promise<AgentResult> {
+      async execute(prompt: string, attachments?: AgentAttachment[]): Promise<AgentResult> {
         lastSessionError = undefined;
 
         unsubscribe = session.on((event: SessionEvent) => {
@@ -178,10 +219,13 @@ export class CopilotProvider implements AgentProvider {
           }
         });
 
+        // Merge config-level attachments with per-call attachments
+        const merged = [...(config.attachments || []), ...(attachments || [])];
+        const { sdkAttachments: copilotAttachments, createdTempFiles } = await toCopilotAttachments(merged);
         try {
           await session.sendAndWait({
             prompt,
-            ...(sdkAttachments?.length ? { attachments: sdkAttachments } : {}),
+            ...(copilotAttachments.length ? { attachments: copilotAttachments } : {}),
           }, 2_147_483_647); // no timeout — agent-manager handles its own AGENT_TIMEOUT_MS
           if (lastSessionError) {
             const diag = formatDiagnostic(diagnoseError('copilot', lastSessionError, config.workingDirectory));
@@ -196,12 +240,18 @@ export class CopilotProvider implements AgentProvider {
             content: `Copilot SDK error: ${diag}`, timestamp: Date.now(),
           });
           return { status: 'failed', error: diag };
+        } finally {
+          await cleanupTempFiles(createdTempFiles);
         }
       },
 
-      async send(message: string): Promise<void> {
+      async send(message: string, attachments?: AgentAttachment[]): Promise<void> {
+        const { sdkAttachments: copilotAttachments, createdTempFiles } = await toCopilotAttachments(attachments);
         try {
-          await session.sendAndWait({ prompt: message }, 2_147_483_647); // no timeout
+          await session.sendAndWait({
+            prompt: message,
+            ...(copilotAttachments.length ? { attachments: copilotAttachments } : {}),
+          }, 2_147_483_647); // no timeout
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           const diag = formatDiagnostic(diagnoseError('copilot', msg, config.workingDirectory));
@@ -209,6 +259,8 @@ export class CopilotProvider implements AgentProvider {
             id: uuid(), contextId: config.contextId, type: 'error',
             content: `Copilot SDK error: ${diag}`, timestamp: Date.now(),
           });
+        } finally {
+          await cleanupTempFiles(createdTempFiles);
         }
       },
 

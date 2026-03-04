@@ -25,6 +25,34 @@ type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
 
+/** Build Claude SDK content blocks from a prompt and optional image attachments. Exported for testing. */
+export function buildContentBlocks(prompt: string, attachments?: AgentAttachment[]): ContentBlock[] {
+  const content: ContentBlock[] = [];
+  if (attachments) {
+    for (const att of attachments) {
+      if (att.type === 'base64_image' && att.data && att.mediaType) {
+        if (!getSafeExtension(att.mediaType)) {
+          console.warn(`[claude-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
+          continue;
+        }
+        if (!isAttachmentSizeValid(att.data)) {
+          console.warn(`[claude-provider] rejected oversized attachment (${(att.data.length / 1024 / 1024).toFixed(1)}MB)`);
+          continue;
+        }
+        if (att.displayName) {
+          content.push({ type: 'text', text: `[${att.displayName}]` });
+        }
+        content.push({
+          type: 'image',
+          source: { type: 'base64', media_type: att.mediaType, data: att.data },
+        });
+      }
+    }
+  }
+  content.push({ type: 'text', text: prompt });
+  return content;
+}
+
 export class ClaudeProvider implements AgentProvider {
   readonly name: AgentType = 'claude';
   readonly displayName = 'Claude Code';
@@ -60,33 +88,6 @@ export class ClaudeProvider implements AgentProvider {
       let resolve: () => void;
       queryLock = new Promise<void>(r => { resolve = r; });
       return prev.then(fn).finally(() => resolve!());
-    }
-
-    function buildContentBlocks(prompt: string, attachments?: AgentAttachment[]): ContentBlock[] {
-      const content: ContentBlock[] = [];
-      if (attachments) {
-        for (const att of attachments) {
-          if (att.type === 'base64_image' && att.data && att.mediaType) {
-            if (!getSafeExtension(att.mediaType)) {
-              console.warn(`[claude-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
-              continue;
-            }
-            if (!isAttachmentSizeValid(att.data)) {
-              console.warn(`[claude-provider] rejected oversized attachment (${(att.data.length / 1024 / 1024).toFixed(1)}MB)`);
-              continue;
-            }
-            if (att.displayName) {
-              content.push({ type: 'text', text: `[${att.displayName}]` });
-            }
-            content.push({
-              type: 'image',
-              source: { type: 'base64', media_type: att.mediaType, data: att.data },
-            });
-          }
-        }
-      }
-      content.push({ type: 'text', text: prompt });
-      return content;
     }
 
     async function runQuery(
@@ -193,10 +194,11 @@ export class ClaudeProvider implements AgentProvider {
         return sessionId;
       },
 
-      async execute(prompt: string): Promise<AgentResult> {
+      async execute(prompt: string, attachments?: AgentAttachment[]): Promise<AgentResult> {
         return withLock(async () => {
           try {
-            return await runQuery(prompt, config.attachments, config.onEvent, config.contextId);
+            const merged = [...(config.attachments || []), ...(attachments || [])];
+            return await runQuery(prompt, merged.length ? merged : undefined, config.onEvent, config.contextId);
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             const diag = formatDiagnostic(diagnoseError('claude', message, config.workingDirectory));
@@ -209,13 +211,13 @@ export class ClaudeProvider implements AgentProvider {
         });
       },
 
-      async send(message: string): Promise<void> {
+      async send(message: string, attachments?: AgentAttachment[]): Promise<void> {
         if (!sessionId) {
           throw new Error('Claude session not initialized — execute() must be called first');
         }
         await withLock(async () => {
           try {
-            await runQuery(message, undefined, config.onEvent, config.contextId);
+            await runQuery(message, attachments, config.onEvent, config.contextId);
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             const diag = formatDiagnostic(diagnoseError('claude', msg, config.workingDirectory));
