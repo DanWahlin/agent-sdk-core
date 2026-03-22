@@ -90,12 +90,14 @@ describe('AgentSessionConfig', () => {
       onEvent: () => {},
       attachments: [
         { type: 'base64_image' as const, data: 'abc123', mediaType: 'image/png', displayName: 'Screenshot' },
+        { type: 'base64_blob' as const, data: 'pdf123', mediaType: 'application/pdf', displayName: 'Spec PDF' },
         { type: 'file' as const, path: '/tmp/img.png' },
         { type: 'local_image' as const, path: '/tmp/local.png' },
       ],
     };
-    assert.equal(config.attachments!.length, 3);
+    assert.equal(config.attachments!.length, 4);
     assert.equal(config.attachments![0].type, 'base64_image');
+    assert.equal(config.attachments![1].type, 'base64_blob');
   });
 
   it('should allow execute() and send() with optional attachments parameter', () => {
