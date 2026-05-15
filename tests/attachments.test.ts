@@ -237,6 +237,64 @@ describe('CopilotProvider image attachments', () => {
     assert.equal(result.status, 'failed');
     await session.destroy();
   });
+
+  it('should map legacy approved permission hooks to Copilot SDK approve-once decisions', async () => {
+    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
+    (provider as any).client = {
+      createSession: async (config: any) => {
+        permissionHandler = config.onPermissionRequest;
+        return {
+          sessionId: 'mock-copilot-session',
+          on: (_cb: unknown) => () => {},
+          sendAndWait: async () => undefined,
+          abort: async () => {},
+          disconnect: async () => {},
+          destroy: async () => {},
+        };
+      },
+    };
+
+    await provider.createSession({
+      contextId: 'test-ctx',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent: () => {},
+      hooks: {
+        onPermissionRequest: () => ({ kind: 'approved' }),
+      },
+    });
+
+    assert.deepEqual(permissionHandler!({ kind: 'shell' }), { kind: 'approve-once' });
+  });
+
+  it('should map legacy denied permission hooks to Copilot SDK reject decisions', async () => {
+    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
+    (provider as any).client = {
+      createSession: async (config: any) => {
+        permissionHandler = config.onPermissionRequest;
+        return {
+          sessionId: 'mock-copilot-session',
+          on: (_cb: unknown) => () => {},
+          sendAndWait: async () => undefined,
+          abort: async () => {},
+          disconnect: async () => {},
+          destroy: async () => {},
+        };
+      },
+    };
+
+    await provider.createSession({
+      contextId: 'test-ctx',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent: () => {},
+      hooks: {
+        onPermissionRequest: () => ({ kind: 'denied-by-rules' }),
+      },
+    });
+
+    assert.deepEqual(permissionHandler!({ kind: 'shell' }), { kind: 'reject' });
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════

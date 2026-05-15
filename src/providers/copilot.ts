@@ -27,13 +27,14 @@ export interface CopilotProviderOptions {
 
 type CopilotAttachment = NonNullable<MessageOptions['attachments']>[number];
 type CopilotSdkPermissionResult = PermissionRequestResult;
-type NormalizedPermissionResult =
-  | CopilotSdkPermissionResult
-  | { kind: 'approved' | 'denied-by-rules' }
+type LegacyPermissionResult =
+  | { kind: 'approved' }
+  | { kind: 'denied-by-rules'; rules?: unknown[] }
   | { kind: string };
+type NormalizedPermissionResult = CopilotSdkPermissionResult | LegacyPermissionResult;
 
-const COPILOT_APPROVED: PermissionRequestResult = { kind: 'approved' };
-const COPILOT_DENIED: PermissionRequestResult = { kind: 'denied-by-rules', rules: [] };
+const COPILOT_APPROVED = { kind: 'approve-once' } as CopilotSdkPermissionResult;
+const COPILOT_DENIED = { kind: 'reject' } as CopilotSdkPermissionResult;
 
 function toCopilotPermissionResult(result: NormalizedPermissionResult): CopilotSdkPermissionResult {
   switch (result.kind) {
@@ -42,11 +43,15 @@ function toCopilotPermissionResult(result: NormalizedPermissionResult): CopilotS
     case 'approve-for-session':
     case 'approve-for-location':
     case 'approve-permanently':
-      return COPILOT_APPROVED;
+      return result.kind === 'approved' ? COPILOT_APPROVED : result as CopilotSdkPermissionResult;
     case 'no-result':
       return { kind: 'no-result' };
-    default:
+    case 'denied-by-rules':
       return COPILOT_DENIED;
+    default:
+      return result.kind === 'reject' || result.kind === 'user-not-available'
+        ? result as CopilotSdkPermissionResult
+        : COPILOT_DENIED;
   }
 }
 
