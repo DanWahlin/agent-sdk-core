@@ -3,6 +3,8 @@ import {
   CopilotClient,
   type CopilotSession,
   type MessageOptions,
+  type PermissionRequest,
+  type PermissionRequestResult,
   type SessionEvent,
 } from '@github/copilot-sdk';
 import type { AgentType } from '../types/agents.js';
@@ -24,6 +26,29 @@ export interface CopilotProviderOptions {
 }
 
 type CopilotAttachment = NonNullable<MessageOptions['attachments']>[number];
+type CopilotSdkPermissionResult = PermissionRequestResult;
+type NormalizedPermissionResult =
+  | CopilotSdkPermissionResult
+  | { kind: 'approved' | 'denied-by-rules' }
+  | { kind: string };
+
+const COPILOT_APPROVED: PermissionRequestResult = { kind: 'approved' };
+const COPILOT_DENIED: PermissionRequestResult = { kind: 'denied-by-rules', rules: [] };
+
+function toCopilotPermissionResult(result: NormalizedPermissionResult): CopilotSdkPermissionResult {
+  switch (result.kind) {
+    case 'approved':
+    case 'approve-once':
+    case 'approve-for-session':
+    case 'approve-for-location':
+    case 'approve-permanently':
+      return COPILOT_APPROVED;
+    case 'no-result':
+      return { kind: 'no-result' };
+    default:
+      return COPILOT_DENIED;
+  }
+}
 
 function normalizeMimeType(mediaType: string): string | null {
   const normalized = mediaType.toLowerCase().trim().split(';')[0];
@@ -121,18 +146,14 @@ export class CopilotProvider implements AgentProvider {
       : undefined;
 
     // Build permission handler: merge deny-list with consumer-provided hook
-    const onPermissionRequest = (req: { kind: string }) => {
+    const onPermissionRequest = (req: PermissionRequest): PermissionRequestResult => {
       if (deniedTools.size > 0 && deniedTools.has(req.kind)) {
-        return { kind: 'denied-by-rules' as const, rules: [] };
+        return COPILOT_DENIED;
       }
       if (consumerHooks?.onPermissionRequest) {
-        const result = consumerHooks.onPermissionRequest(req);
-        if (result.kind === 'denied-by-rules') {
-          return { kind: 'denied-by-rules' as const, rules: [] };
-        }
-        return { kind: 'approved' as const };
+        return toCopilotPermissionResult(consumerHooks.onPermissionRequest(req));
       }
-      return { kind: 'approved' as const };
+      return COPILOT_APPROVED;
     };
 
     const sessionConfig = {

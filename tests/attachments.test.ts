@@ -288,6 +288,14 @@ describe('ClaudeProvider image attachments', () => {
     assert.equal((imageBlocks[1] as any).source.media_type, 'image/jpeg');
   });
 
+  it('should normalize image/jpg to image/jpeg for Claude SDK compatibility', () => {
+    const blocks = buildContentBlocks('describe jpg', [makeImageAttachment({ mediaType: 'image/jpg' })]);
+
+    const imageBlock = blocks.find((b: any) => b.type === 'image');
+    assert.ok(imageBlock, 'image/jpg should be accepted as a JPEG alias');
+    assert.equal((imageBlock as any).source.media_type, 'image/jpeg');
+  });
+
   it('should reject base64_image with invalid MIME type', () => {
     const blocks = buildContentBlocks('test', [makeImageAttachment({ mediaType: 'text/html' })]);
 

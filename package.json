@@ -1,6 +1,6 @@
 {
   "name": "@codewithdan/agent-sdk-core",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex, OpenCode)",
   "type": "module",
   "main": "dist/index.js",
@@ -36,8 +36,8 @@
     "src"
   ],
   "peerDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.0",
-    "@github/copilot-sdk": "^0.2.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.0 || ^0.3.0",
+    "@github/copilot-sdk": "^0.2.0 || ^1.0.0-beta",
     "@openai/codex-sdk": ">=0.80.0",
     "@opencode-ai/sdk": "^1.0.0",
     "ws": "^8.0.0"
@@ -60,11 +60,11 @@
     }
   },
   "dependencies": {
-    "uuid": "^11.0.0"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.50",
-    "@github/copilot-sdk": "^0.2.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.142",
+    "@github/copilot-sdk": "^1.0.0-beta.4",
     "@openai/codex-sdk": "^0.104.0",
     "@opencode-ai/sdk": "^1.2.14",
     "@types/uuid": "^10.0.0",
