@@ -1,4 +1,4 @@
-import { resolve } from 'path';
+import { isAbsolute, relative, resolve } from 'path';
 
 /** Maximum base64 attachment size (10MB encoded ≈ 7.5MB decoded) */
 export const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
@@ -20,7 +20,8 @@ const ALLOWED_IMAGE_TYPES: Record<string, string> = {
 export function isPathWithinBoundary(filePath: string, boundary: string): boolean {
   const resolvedPath = resolve(filePath);
   const resolvedBoundary = resolve(boundary);
-  return resolvedPath === resolvedBoundary || resolvedPath.startsWith(resolvedBoundary + '/');
+  const relativePath = relative(resolvedBoundary, resolvedPath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath));
 }
 
 /**
