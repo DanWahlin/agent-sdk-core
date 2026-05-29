@@ -1,7 +1,10 @@
-import { v4 as uuid, v4 as randomUUID } from 'uuid';
+import { v4 as uuid } from 'uuid';
 import {
   CopilotClient,
   type CopilotSession,
+  type MessageOptions,
+  type PermissionRequest,
+  type PermissionRequestResult,
   type SessionEvent,
 } from '@github/copilot-sdk';
 import type { AgentType } from '../types/agents.js';
@@ -15,14 +18,46 @@ import type {
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
 import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
-import { writeFile, unlink } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
 
 export interface CopilotProviderOptions {
   model?: string;
   /** Comma-separated tool kinds to deny (e.g., "dangerous_tool,rm_rf") */
   deniedTools?: string;
+}
+
+type CopilotAttachment = NonNullable<MessageOptions['attachments']>[number];
+type CopilotSdkPermissionResult = PermissionRequestResult;
+type LegacyPermissionResult =
+  | { kind: 'approved' }
+  | { kind: 'denied-by-rules'; rules?: unknown[] }
+  | { kind: string };
+type NormalizedPermissionResult = CopilotSdkPermissionResult | LegacyPermissionResult;
+
+const COPILOT_APPROVED = { kind: 'approve-once' } as CopilotSdkPermissionResult;
+const COPILOT_DENIED = { kind: 'reject' } as CopilotSdkPermissionResult;
+
+function toCopilotPermissionResult(result: NormalizedPermissionResult): CopilotSdkPermissionResult {
+  switch (result.kind) {
+    case 'approved':
+    case 'approve-once':
+    case 'approve-for-session':
+    case 'approve-for-location':
+    case 'approve-permanently':
+      return result.kind === 'approved' ? COPILOT_APPROVED : result as CopilotSdkPermissionResult;
+    case 'no-result':
+      return { kind: 'no-result' };
+    case 'denied-by-rules':
+      return COPILOT_DENIED;
+    default:
+      return result.kind === 'reject' || result.kind === 'user-not-available'
+        ? result as CopilotSdkPermissionResult
+        : COPILOT_DENIED;
+  }
+}
+
+function normalizeMimeType(mediaType: string): string | null {
+  const normalized = mediaType.toLowerCase().trim().split(';')[0];
+  return normalized.includes('/') ? normalized : null;
 }
 
 export class CopilotProvider implements AgentProvider {
@@ -44,7 +79,6 @@ export class CopilotProvider implements AgentProvider {
   async start(): Promise<void> {
     this.client = new CopilotClient({
       logLevel: 'info',
-      autoRestart: true,
     });
     await this.client.start();
     console.log(`[copilot-provider] SDK client started (model: ${this.model})`);
@@ -117,14 +151,14 @@ export class CopilotProvider implements AgentProvider {
       : undefined;
 
     // Build permission handler: merge deny-list with consumer-provided hook
-    const onPermissionRequest = (req: { kind: string }) => {
+    const onPermissionRequest = (req: PermissionRequest): PermissionRequestResult => {
       if (deniedTools.size > 0 && deniedTools.has(req.kind)) {
-        return { kind: 'denied-by-rules' as const };
+        return COPILOT_DENIED;
       }
       if (consumerHooks?.onPermissionRequest) {
-        return consumerHooks.onPermissionRequest(req);
+        return toCopilotPermissionResult(consumerHooks.onPermissionRequest(req));
       }
-      return { kind: 'approved' as const };
+      return COPILOT_APPROVED;
     };
 
     const sessionConfig = {
@@ -155,14 +189,12 @@ export class CopilotProvider implements AgentProvider {
     let unsubscribe: (() => void) | null = null;
     let lastSessionError: string | undefined;
 
-    /** Convert AgentAttachments to Copilot SDK file attachments, bridging images to temp files.
-     *  Returns the SDK attachments and a list of temp file paths created (for per-request cleanup). */
-    async function toCopilotAttachments(
+    /** Convert AgentAttachments to Copilot SDK attachments, using native blobs for inline data. */
+    function toCopilotAttachments(
       attachments: AgentAttachment[] | undefined,
-    ): Promise<{ sdkAttachments: Array<{ type: 'file'; path: string; displayName?: string }>; createdTempFiles: string[] }> {
-      if (!attachments?.length) return { sdkAttachments: [], createdTempFiles: [] };
-      const sdkAttachments: Array<{ type: 'file'; path: string; displayName?: string }> = [];
-      const createdTempFiles: string[] = [];
+    ): CopilotAttachment[] {
+      if (!attachments?.length) return [];
+      const sdkAttachments: CopilotAttachment[] = [];
 
       for (const att of attachments) {
         if (att.type === 'file' && att.path) {
@@ -171,20 +203,26 @@ export class CopilotProvider implements AgentProvider {
             continue;
           }
           sdkAttachments.push({ type: 'file', path: att.path, displayName: att.displayName });
-        } else if (att.type === 'base64_image' && att.data && att.mediaType) {
-          const ext = getSafeExtension(att.mediaType);
-          if (!ext) {
+        } else if ((att.type === 'base64_image' || att.type === 'base64_blob') && att.data && att.mediaType) {
+          if (att.type === 'base64_image' && !getSafeExtension(att.mediaType)) {
             console.warn(`[copilot-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
+            continue;
+          }
+          const mimeType = normalizeMimeType(att.mediaType);
+          if (!mimeType) {
+            console.warn(`[copilot-provider] rejected attachment with malformed MIME type: ${att.mediaType}`);
             continue;
           }
           if (!isAttachmentSizeValid(att.data)) {
             console.warn(`[copilot-provider] rejected oversized attachment (${(att.data.length / 1024 / 1024).toFixed(1)}MB)`);
             continue;
           }
-          const tempPath = join(tmpdir(), `agent-sdk-${randomUUID()}.${ext}`);
-          await writeFile(tempPath, Buffer.from(att.data, 'base64'), { mode: 0o600 });
-          createdTempFiles.push(tempPath);
-          sdkAttachments.push({ type: 'file', path: tempPath, displayName: att.displayName });
+          sdkAttachments.push({
+            type: 'blob',
+            data: att.data,
+            mimeType,
+            displayName: att.displayName,
+          });
         } else if (att.type === 'local_image' && att.path) {
           if (!isPathWithinBoundary(att.path, config.workingDirectory)) {
             console.warn(`[copilot-provider] blocked attachment outside working directory: ${att.path}`);
@@ -194,14 +232,7 @@ export class CopilotProvider implements AgentProvider {
         }
       }
 
-      return { sdkAttachments, createdTempFiles };
-    }
-
-    /** Clean up temp files created for a single request */
-    async function cleanupTempFiles(files: string[]): Promise<void> {
-      for (const f of files) {
-        try { await unlink(f); } catch { /* ignore missing files */ }
-      }
+      return sdkAttachments;
     }
 
     const agentSession: AgentSession = {
@@ -221,7 +252,7 @@ export class CopilotProvider implements AgentProvider {
 
         // Merge config-level attachments with per-call attachments
         const merged = [...(config.attachments || []), ...(attachments || [])];
-        const { sdkAttachments: copilotAttachments, createdTempFiles } = await toCopilotAttachments(merged);
+        const copilotAttachments = toCopilotAttachments(merged);
         try {
           await session.sendAndWait({
             prompt,
@@ -240,13 +271,11 @@ export class CopilotProvider implements AgentProvider {
             content: `Copilot SDK error: ${diag}`, timestamp: Date.now(),
           });
           return { status: 'failed', error: diag };
-        } finally {
-          await cleanupTempFiles(createdTempFiles);
         }
       },
 
       async send(message: string, attachments?: AgentAttachment[]): Promise<void> {
-        const { sdkAttachments: copilotAttachments, createdTempFiles } = await toCopilotAttachments(attachments);
+        const copilotAttachments = toCopilotAttachments(attachments);
         try {
           await session.sendAndWait({
             prompt: message,
@@ -259,8 +288,6 @@ export class CopilotProvider implements AgentProvider {
             id: uuid(), contextId: config.contextId, type: 'error',
             content: `Copilot SDK error: ${diag}`, timestamp: Date.now(),
           });
-        } finally {
-          await cleanupTempFiles(createdTempFiles);
         }
       },
 
@@ -273,7 +300,7 @@ export class CopilotProvider implements AgentProvider {
           unsubscribe();
           unsubscribe = null;
         }
-        try { await session.destroy(); } catch { /* ignore */ }
+        try { await session.disconnect(); } catch { /* ignore */ }
       },
     };
 

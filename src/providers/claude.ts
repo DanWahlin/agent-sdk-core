@@ -21,9 +21,26 @@ export interface ClaudeProviderOptions {
   spawnClaudeCodeProcess?: (options: SpawnOptions) => SpawnedProcess;
 }
 
+type ClaudeImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+
 type ContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
+  | { type: 'image'; source: { type: 'base64'; media_type: ClaudeImageMediaType; data: string } };
+
+function normalizeClaudeImageMediaType(mediaType: string): ClaudeImageMediaType | null {
+  const normalized = mediaType.toLowerCase().trim().split(';')[0];
+  switch (normalized) {
+    case 'image/png':
+    case 'image/jpeg':
+    case 'image/gif':
+    case 'image/webp':
+      return normalized;
+    case 'image/jpg':
+      return 'image/jpeg';
+    default:
+      return null;
+  }
+}
 
 /** Build Claude SDK content blocks from a prompt and optional image attachments. Exported for testing. */
 export function buildContentBlocks(prompt: string, attachments?: AgentAttachment[]): ContentBlock[] {
@@ -31,7 +48,8 @@ export function buildContentBlocks(prompt: string, attachments?: AgentAttachment
   if (attachments) {
     for (const att of attachments) {
       if (att.type === 'base64_image' && att.data && att.mediaType) {
-        if (!getSafeExtension(att.mediaType)) {
+        const mediaType = normalizeClaudeImageMediaType(att.mediaType);
+        if (!mediaType || !getSafeExtension(mediaType)) {
           console.warn(`[claude-provider] rejected attachment with unsupported MIME type: ${att.mediaType}`);
           continue;
         }
@@ -44,7 +62,7 @@ export function buildContentBlocks(prompt: string, attachments?: AgentAttachment
         }
         content.push({
           type: 'image',
-          source: { type: 'base64', media_type: att.mediaType, data: att.data },
+          source: { type: 'base64', media_type: mediaType, data: att.data },
         });
       }
     }
@@ -98,7 +116,7 @@ export class ClaudeProvider implements AgentProvider {
     ): Promise<AgentResult> {
       let result: AgentResult = { status: 'complete' };
       const contentBlocks = buildContentBlocks(prompt, attachments);
-      const messageGenerator = createMessageGenerator(contentBlocks);
+      const messageGenerator = createMessageGenerator(contentBlocks) as Parameters<typeof query>[0]['prompt'];
 
       const response = query({
         prompt: messageGenerator,
@@ -242,14 +260,7 @@ export class ClaudeProvider implements AgentProvider {
   }
 }
 
-type SDKUserMessage = {
-  type: 'user';
-  message: { role: 'user'; content: ContentBlock[] };
-  parent_tool_use_id: string | null;
-  session_id: string;
-};
-
-async function* createMessageGenerator(content: ContentBlock[]): AsyncGenerator<SDKUserMessage> {
+async function* createMessageGenerator(content: ContentBlock[]): AsyncGenerator<unknown> {
   yield {
     type: 'user' as const,
     message: {

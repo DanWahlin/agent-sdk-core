@@ -27,7 +27,7 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 - **Unified Provider Interface** — Single `AgentProvider`/`AgentSession` API that works identically across Copilot, Claude Code, Codex, and OpenCode SDKs
 - **Rich Event Stream** — 10 granular `AgentEvent` types (thinking, output, command, command_output, file_read, file_write, file_edit, tool_call, test_result, error, complete) with metadata for files, diffs, commands, and test results
 - **Session Resume** — Continue previous agent sessions via `resumeSessionId` (Copilot `resumeSession()`, Codex `resumeThread()`, Claude `resume` option, OpenCode `session.get()`)
-- **Image/Attachment Support** — Pass screenshots and files to agents via a unified `AgentAttachment` type on both `execute()` and `send()` calls — each provider handles the SDK-specific format (Copilot: base64→temp file bridging, Claude: native image blocks, Codex: local_image input). Config-level attachments merge with per-call attachments.
+- **Image/Attachment Support** — Pass screenshots, inline binary payloads, and files via a unified `AgentAttachment` type on both `execute()` and `send()` calls — each provider handles the SDK-specific format (Copilot: native `blob` attachments for base64 image/binary data, Claude: native image blocks, Codex: local_image input). Config-level attachments merge with per-call attachments.
 - **Middleware Hooks** — Inject `onPreToolUse` (e.g., worktree path rewriting) and `onPermissionRequest` (e.g., tool deny-lists) without modifying provider code
 - **Agent Detection** — `detectAgents()` checks which CLI tools are installed and available on the system
 - **Progress Aggregator** — Batches events over a configurable interval and produces TTS-friendly summaries ("Reading 3 files", "All 5 tests passing")
@@ -183,7 +183,7 @@ const provider = new CopilotProvider({
 });
 ```
 
-Features: streaming events, session resume, file attachments with base64 image bridging (images are converted to temp files for the SDK), worktree path rewriting hooks, permission deny-list, per-request temp file cleanup, spinner filtering.
+Features: streaming events, session resume, native blob attachments for inline base64 image/binary payloads, file path attachments, worktree path rewriting hooks, permission deny-list, spinner filtering.
 
 ### ClaudeProvider
 
@@ -247,6 +247,8 @@ const session = await provider.createSession({
   },
 });
 ```
+
+For Copilot-specific inline binary payloads, you can also pass `type: 'base64_blob'` with any valid MIME type (for example `application/pdf` or `application/octet-stream`). Other providers continue to support their existing attachment formats and may ignore unsupported inline binary types.
 
 ## ProgressAggregator
 

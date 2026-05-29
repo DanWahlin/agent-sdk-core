@@ -1,6 +1,5 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'fs';
 import type { AgentEvent } from '../src/types/events.ts';
 import type { AgentAttachment } from '../src/types/providers.ts';
 
@@ -25,7 +24,7 @@ function collectEvents(): { events: AgentEvent[]; onEvent: (e: AgentEvent) => vo
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 1. COPILOT PROVIDER — image bridging + per-request temp file cleanup
+// 1. COPILOT PROVIDER — native blob attachments
 // ══════════════════════════════════════════════════════════════════════
 
 describe('CopilotProvider image attachments', () => {
@@ -43,6 +42,7 @@ describe('CopilotProvider image attachments', () => {
         return undefined;
       },
       abort: async () => {},
+      disconnect: async () => {},
       destroy: async () => {},
     };
 
@@ -58,7 +58,7 @@ describe('CopilotProvider image attachments', () => {
     (provider as any).client = mockClient;
   });
 
-  it('should bridge base64_image to file attachment on execute()', async () => {
+  it('should send base64_image as a native blob attachment on execute()', async () => {
     const { events, onEvent } = collectEvents();
     const session = await provider.createSession({
       contextId: 'test-ctx',
@@ -74,17 +74,14 @@ describe('CopilotProvider image attachments', () => {
     assert.ok(call.attachments, 'should have attachments');
     assert.equal(call.attachments!.length, 1);
     const att = call.attachments![0] as any;
-    assert.equal(att.type, 'file');
-    assert.ok(att.path.includes('agent-sdk-'), 'path should be a temp file');
-    assert.ok(att.path.endsWith('.png'), 'should have .png extension');
+    assert.equal(att.type, 'blob');
+    assert.equal(att.data, TINY_PNG_B64);
+    assert.equal(att.mimeType, 'image/png');
     assert.equal(att.displayName, 'screenshot.png');
-
-    // Temp file should be cleaned up after execute returns
-    assert.equal(existsSync(att.path), false, 'temp file should be cleaned up');
     await session.destroy();
   });
 
-  it('should bridge base64_image to file attachment on send()', async () => {
+  it('should send base64_image as a native blob attachment on send()', async () => {
     const { events, onEvent } = collectEvents();
     const session = await provider.createSession({
       contextId: 'test-ctx',
@@ -101,10 +98,9 @@ describe('CopilotProvider image attachments', () => {
     assert.ok(sendCall.attachments);
     assert.equal(sendCall.attachments!.length, 1);
     const att = sendCall.attachments![0] as any;
-    assert.equal(att.type, 'file');
-    assert.ok(att.path.endsWith('.jpg'));
+    assert.equal(att.type, 'blob');
+    assert.equal(att.mimeType, 'image/jpeg');
     assert.equal(att.displayName, 'photo.jpg');
-    assert.equal(existsSync(att.path), false, 'temp file should be cleaned up');
     await session.destroy();
   });
 
@@ -123,7 +119,30 @@ describe('CopilotProvider image attachments', () => {
     const call = sendAndWaitCalls[0];
     assert.equal(call.attachments!.length, 2, 'should have config + per-call attachments');
     assert.equal((call.attachments![0] as any).path, '/tmp/context.txt');
-    assert.equal((call.attachments![1] as any).type, 'file'); // bridged image
+    assert.equal((call.attachments![1] as any).type, 'blob');
+    await session.destroy();
+  });
+
+  it('should support inline binary blob attachments', async () => {
+    const { onEvent } = collectEvents();
+    const session = await provider.createSession({
+      contextId: 'test-ctx',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent,
+    });
+
+    await session.execute('inspect this pdf', [{
+      type: 'base64_blob',
+      data: Buffer.from('%PDF-test').toString('base64'),
+      mediaType: 'application/pdf',
+      displayName: 'spec.pdf',
+    }]);
+
+    const att = sendAndWaitCalls[0].attachments![0] as any;
+    assert.equal(att.type, 'blob');
+    assert.equal(att.mimeType, 'application/pdf');
+    assert.equal(att.displayName, 'spec.pdf');
     await session.destroy();
   });
 
@@ -193,17 +212,13 @@ describe('CopilotProvider image attachments', () => {
     await session.destroy();
   });
 
-  it('should clean up temp files even when sendAndWait throws', async () => {
-    // Replace mock to throw
-    let capturedPath: string | null = null;
+  it('should return a failed result when sendAndWait throws with blob attachments', async () => {
     const throwingSession = {
       sessionId: 'mock-throw',
       on: (_cb: unknown) => () => {},
-      sendAndWait: async (options: any) => {
-        if (options.attachments?.[0]) capturedPath = options.attachments[0].path;
-        throw new Error('SDK crashed');
-      },
+      sendAndWait: async (_options: any) => { throw new Error('SDK crashed'); },
       abort: async () => {},
+      disconnect: async () => {},
       destroy: async () => {},
     };
     (provider as any).client = {
@@ -220,9 +235,65 @@ describe('CopilotProvider image attachments', () => {
 
     const result = await session.execute('test', [makeImageAttachment()]);
     assert.equal(result.status, 'failed');
-    assert.ok(capturedPath, 'temp file should have been created');
-    assert.equal(existsSync(capturedPath!), false, 'temp file should be cleaned up even on error');
     await session.destroy();
+  });
+
+  it('should map legacy approved permission hooks to Copilot SDK approve-once decisions', async () => {
+    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
+    (provider as any).client = {
+      createSession: async (config: any) => {
+        permissionHandler = config.onPermissionRequest;
+        return {
+          sessionId: 'mock-copilot-session',
+          on: (_cb: unknown) => () => {},
+          sendAndWait: async () => undefined,
+          abort: async () => {},
+          disconnect: async () => {},
+          destroy: async () => {},
+        };
+      },
+    };
+
+    await provider.createSession({
+      contextId: 'test-ctx',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent: () => {},
+      hooks: {
+        onPermissionRequest: () => ({ kind: 'approved' }),
+      },
+    });
+
+    assert.deepEqual(permissionHandler!({ kind: 'shell' }), { kind: 'approve-once' });
+  });
+
+  it('should map legacy denied permission hooks to Copilot SDK reject decisions', async () => {
+    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
+    (provider as any).client = {
+      createSession: async (config: any) => {
+        permissionHandler = config.onPermissionRequest;
+        return {
+          sessionId: 'mock-copilot-session',
+          on: (_cb: unknown) => () => {},
+          sendAndWait: async () => undefined,
+          abort: async () => {},
+          disconnect: async () => {},
+          destroy: async () => {},
+        };
+      },
+    };
+
+    await provider.createSession({
+      contextId: 'test-ctx',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent: () => {},
+      hooks: {
+        onPermissionRequest: () => ({ kind: 'denied-by-rules' }),
+      },
+    });
+
+    assert.deepEqual(permissionHandler!({ kind: 'shell' }), { kind: 'reject' });
   });
 });
 
@@ -273,6 +344,14 @@ describe('ClaudeProvider image attachments', () => {
     assert.equal(imageBlocks.length, 2, 'should have two image blocks');
     assert.equal((imageBlocks[0] as any).source.media_type, 'image/png');
     assert.equal((imageBlocks[1] as any).source.media_type, 'image/jpeg');
+  });
+
+  it('should normalize image/jpg to image/jpeg for Claude SDK compatibility', () => {
+    const blocks = buildContentBlocks('describe jpg', [makeImageAttachment({ mediaType: 'image/jpg' })]);
+
+    const imageBlock = blocks.find((b: any) => b.type === 'image');
+    assert.ok(imageBlock, 'image/jpg should be accepted as a JPEG alias');
+    assert.equal((imageBlock as any).source.media_type, 'image/jpeg');
   });
 
   it('should reject base64_image with invalid MIME type', () => {

@@ -6,14 +6,14 @@ export interface AgentResult {
 }
 
 export interface AgentAttachment {
-  type: 'file' | 'base64_image' | 'local_image';
+  type: 'file' | 'base64_image' | 'base64_blob' | 'local_image';
   /** File path (for type 'file' or 'local_image') */
   path?: string;
   /** Display name for the attachment */
   displayName?: string;
-  /** Base64-encoded data (for type 'base64_image') */
+  /** Base64-encoded data (for type 'base64_image' or 'base64_blob') */
   data?: string;
-  /** MIME type (for type 'base64_image') */
+  /** MIME type (for type 'base64_image' or 'base64_blob') */
   mediaType?: string;
 }
 
