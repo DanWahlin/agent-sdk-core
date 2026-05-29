@@ -20,11 +20,12 @@ async function checkCLI(command: string): Promise<{ installed: boolean; version?
 }
 
 export async function detectAgents(): Promise<AgentInfo[]> {
-  const [copilotCheck, claudeCheck, codexCheck, opencodeCheck] = await Promise.all([
+  const [copilotCheck, claudeCheck, codexCheck, opencodeCheck, hermesCheck] = await Promise.all([
     checkCLI('copilot'),
     checkCLI('claude'),
     checkCLI('codex'),
     checkCLI('opencode'),
+    checkCLI('hermes'),
   ]);
 
   const agents: AgentInfo[] = [];
@@ -69,6 +70,14 @@ export async function detectAgents(): Promise<AgentInfo[]> {
     available: opencodeCheck.installed,
     version: opencodeCheck.version,
     reason: opencodeCheck.installed ? undefined : 'OpenCode CLI not found in PATH',
+  });
+
+  agents.push({
+    name: 'hermes',
+    displayName: 'Hermes Agent',
+    available: hermesCheck.installed,
+    version: hermesCheck.version,
+    reason: hermesCheck.installed ? undefined : 'Hermes CLI not found in PATH',
   });
 
   return agents;
