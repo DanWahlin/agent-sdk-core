@@ -5,6 +5,7 @@ import {
   type MessageOptions,
   type PermissionRequest,
   type PermissionRequestResult,
+  type SessionConfig,
   type SessionEvent,
 } from '@github/copilot-sdk';
 import type { AgentType } from '../types/agents.js';
@@ -106,17 +107,22 @@ export class CopilotProvider implements AgentProvider {
     const consumerHooks = config.hooks;
     const hooks = worktreePath && repoPath
       ? {
-          onPreToolUse: (input: { toolName: string; toolArgs: unknown; cwd: string }) => {
+          onPreToolUse: ((input) => {
+            const workingDirectory = isObject(input) && typeof input.workingDirectory === 'string'
+              ? input.workingDirectory
+              : config.workingDirectory;
+            const hookInput = { ...input, cwd: workingDirectory } as Record<string, unknown> & { toolArgs?: unknown; cwd: string };
+
             // Consumer hook first
             if (consumerHooks?.onPreToolUse) {
-              const result = consumerHooks.onPreToolUse(input);
+              const result = consumerHooks.onPreToolUse(hookInput);
               if (result && typeof result === 'object') {
-                input = { ...input, ...result };
+                Object.assign(hookInput, result);
               }
             }
             // Then worktree path rewriting
-            if (!input.toolArgs || typeof input.toolArgs !== 'object') return {};
-            const args = input.toolArgs as Record<string, unknown>;
+            if (!hookInput.toolArgs || typeof hookInput.toolArgs !== 'object') return {};
+            const args = hookInput.toolArgs as Record<string, unknown>;
             let changed = false;
 
             function rewriteValue(val: unknown): unknown {
@@ -146,7 +152,7 @@ export class CopilotProvider implements AgentProvider {
               modifiedArgs[key] = rewriteValue(value);
             }
             return changed ? { modifiedArgs } : {};
-          },
+          }) satisfies NonNullable<SessionConfig['hooks']>['onPreToolUse'],
         }
       : undefined;
 
@@ -306,6 +312,10 @@ export class CopilotProvider implements AgentProvider {
 
     return agentSession;
   }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function mapSessionEvent(
