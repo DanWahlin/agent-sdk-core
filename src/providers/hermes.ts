@@ -73,6 +73,7 @@ interface RegisteredSession {
 }
 
 const HERMES_PROTOCOL_VERSION = 1;
+const CLIENT_VERSION = '0.4.1';
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const PROMPT_REQUEST_TIMEOUT_MS = 0;
 const SAFE_ENV_PREFIXES = ['HERMES_'];
@@ -158,11 +159,12 @@ export class HermesProvider implements AgentProvider {
         protocolVersion: HERMES_PROTOCOL_VERSION,
         clientInfo: {
           name: 'agent-sdk-core',
-          version: '0.4.0',
+          version: CLIENT_VERSION,
         },
         clientCapabilities: {
           auth: { terminal: false },
           fs: {},
+          terminal: false,
         },
       });
       console.log(`[hermes-provider] ACP initialized (command: ${this.command}, model: ${this.model})`);
@@ -182,10 +184,14 @@ export class HermesProvider implements AgentProvider {
 
   async createSession(config: AgentSessionConfig): Promise<AgentSession> {
     const connection = this.requireConnection();
+    const sessionRequest = {
+      cwd: config.workingDirectory,
+      mcpServers: this.mcpServers,
+    };
     const response = config.resumeSessionId
-      ? await connection.sendRequest('session/resume', { sessionId: config.resumeSessionId }, this.requestTimeoutMs)
-      : await connection.sendRequest('session/new', { cwd: config.workingDirectory, mcpServers: this.mcpServers }, this.requestTimeoutMs);
-    const hermesSessionId = config.resumeSessionId ?? getStringProperty(response, 'sessionId');
+      ? await connection.sendRequest('session/resume', { ...sessionRequest, sessionId: config.resumeSessionId }, this.requestTimeoutMs)
+      : await connection.sendRequest('session/new', sessionRequest, this.requestTimeoutMs);
+    const hermesSessionId = getStringProperty(response, 'sessionId') ?? config.resumeSessionId;
     if (!hermesSessionId) {
       throw new Error('Hermes ACP did not return a sessionId.');
     }

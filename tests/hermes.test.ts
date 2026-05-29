@@ -210,9 +210,11 @@ describe('HermesProvider ACP sessions', () => {
 
   it('should resume a session and avoid duplicating the system prompt', async () => {
     const promptTexts: string[] = [];
+    let resumeParams: Record<string, unknown> | undefined;
     const fake = new FakeHermesProcess((message, process) => {
       if (respondToInitialize(message, process)) return;
       if (message.method === 'session/resume') {
+        resumeParams = message.params;
         process.respond(message, { sessionId: 'sess-existing' });
         return;
       }
@@ -236,6 +238,11 @@ describe('HermesProvider ACP sessions', () => {
     await session.execute('follow-up');
 
     assert.equal(session.sessionId, 'sess-existing');
+    assert.deepEqual(resumeParams, {
+      sessionId: 'sess-existing',
+      cwd: '/tmp/project',
+      mcpServers: [],
+    });
     assert.equal(promptTexts[0], 'follow-up');
   });
 
