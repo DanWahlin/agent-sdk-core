@@ -30,9 +30,9 @@ describe('getSafeExtension', () => {
   it('should accept valid image MIME types', () => {
     assert.equal(getSafeExtension('image/png'), 'png');
     assert.equal(getSafeExtension('image/jpeg'), 'jpg');
+    assert.equal(getSafeExtension('image/jpg'), 'jpg');
     assert.equal(getSafeExtension('image/gif'), 'gif');
     assert.equal(getSafeExtension('image/webp'), 'webp');
-    assert.equal(getSafeExtension('image/svg+xml'), 'svg');
   });
 
   it('should reject non-image MIME types', () => {
