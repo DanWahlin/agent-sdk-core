@@ -29,6 +29,7 @@ export { CopilotProvider } from './providers/copilot.js';
 export { ClaudeProvider } from './providers/claude.js';
 export { CodexProvider } from './providers/codex.js';
 export { OpenCodeProvider } from './providers/opencode.js';
+export { HermesProvider } from './providers/hermes.js';
 export { detectAgents } from './providers/detection.js';
 export { ProgressAggregator } from './providers/progress.js';
 
