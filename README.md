@@ -16,7 +16,7 @@ Each AI coding agent SDK has its own API patterns:
 - **Codex** uses threaded streams with `thread.runStreamed()`
 - **OpenCode** uses an HTTP client/server model with REST sessions + SSE event streaming
 - **Hermes Agent** uses the Agent Client Protocol over a spawned Hermes ACP process
-- **OpenClaw** uses Gateway WebSocket protocol v4 with chat events
+- **OpenClaw** uses the Agent Client Protocol over `openclaw acp`; the direct Gateway WebSocket provider remains available as `OpenClawGatewayProvider`
 
 This package normalizes all providers into a single `AgentProvider` / `AgentSession` interface with a unified `AgentEvent` stream. You write your event handling once, and it works with any agent.
 
@@ -41,7 +41,7 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 
 ## How to use it
 
-1. **Install the package** and whichever SDK peer dependencies you need (`@github/copilot-sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, `@opencode-ai/sdk`, `ws` for OpenClaw)
+1. **Install the package** and whichever SDK peer dependencies you need (`@github/copilot-sdk`, `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, `@opencode-ai/sdk`; `ws` is only needed for `OpenClawGatewayProvider`)
 2. **Detect available agents** — call `detectAgents()` at startup to discover which CLIs are installed on the system
 3. **Create a provider** — instantiate `CopilotProvider`, `ClaudeProvider`, `CodexProvider`, `OpenCodeProvider`, `HermesProvider`, or `OpenClawProvider` with optional config, then call `provider.start()`
 4. **Create a session** — call `provider.createSession()` with a `contextId`, `workingDirectory`, `systemPrompt`, and an `onEvent` callback that receives the unified `AgentEvent` stream
@@ -73,7 +73,10 @@ npm install @openai/codex-sdk
 # For OpenCode
 npm install @opencode-ai/sdk
 
-# For OpenClaw Gateway WebSocket support
+# For OpenClaw ACP bridge support
+# Requires the `openclaw` CLI on PATH. No extra peer dependency needed.
+
+# Optional: for direct OpenClaw Gateway WebSocket support via OpenClawGatewayProvider
 npm install ws
 ```
 
@@ -244,12 +247,16 @@ Features: Agent Client Protocol integration, session resume, image attachments, 
 
 ```typescript
 const provider = new OpenClawProvider({
-  url: 'ws://127.0.0.1:18789',  // optional, defaults to env OPENCLAW_GATEWAY_URL
-  sessionKey: 'agentmic',       // optional, defaults to env OPENCLAW_SESSION_KEY or "main"
+  command: 'openclaw',                  // optional, defaults to env OPENCLAW_COMMAND or "openclaw"
+  gatewayUrl: 'ws://127.0.0.1:18789',   // optional, forwarded to `openclaw acp --url`
+  gatewayToken: process.env.OPENCLAW_GATEWAY_TOKEN, // optional, passed through env only
+  sessionKey: 'agentmic',               // optional, forwarded to `openclaw acp --session`
 });
 ```
 
-Features: Gateway WebSocket protocol v4, token/password/device auth, chat streaming, session resume via `resumeSessionId`, `chat.abort`, `chat.history`, image attachments, defensive runId adoption for older streams, and replacement-delta metadata (`event.metadata.replace`). OpenClaw emits conservative text/error/complete events and does not fabricate tool/file/command events unless the Gateway stream exposes them.
+Features: Agent Client Protocol integration through `openclaw acp`, session resume, image attachments, permission hooks, safe environment forwarding, process cleanup, and compatibility aliases for the old Gateway option names (`url`, `token`, `password`). Secrets are passed via child environment variables or token/password files, not process arguments.
+
+Use `OpenClawGatewayProvider` only when you need direct Gateway protocol features that ACP intentionally hides, such as `chat.history`, signed device identity auth, replacement-delta metadata, or low-level Gateway run-id diagnostics. The Gateway provider remains exported but is no longer the default `OpenClawProvider` path.
 
 ### Session Config
 
@@ -360,12 +367,14 @@ interface WSMessage<T = unknown> {
 | `OPENCODE_MODEL` | `anthropic/claude-sonnet-4-20250514` | OpenCodeProvider |
 | `HERMES_COMMAND` | `hermes` | HermesProvider |
 | `HERMES_*` | _(none)_ | HermesProvider safe forwarded env |
-| `OPENCLAW_GATEWAY_URL` | `ws://127.0.0.1:18789` | OpenClawProvider |
-| `OPENCLAW_TOKEN` / `OPENCLAW_GATEWAY_TOKEN` | _(none)_ | OpenClawProvider token auth |
-| `OPENCLAW_PASSWORD` | _(none)_ | OpenClawProvider password auth |
-| `OPENCLAW_DEVICE_ID` / `OPENCLAW_DEVICE_PUBLIC_KEY` / `OPENCLAW_DEVICE_PRIVATE_KEY` / `OPENCLAW_DEVICE_TOKEN` | _(none)_ | OpenClawProvider signed device auth |
-| `OPENCLAW_SESSION_KEY` | `main` | OpenClawProvider |
-| `OPENCLAW_AGENT_ID` | _(none)_ | OpenClawProvider |
+| `OPENCLAW_COMMAND` | `openclaw` | OpenClawProvider ACP bridge command |
+| `OPENCLAW_MODEL` | `gateway configured default` | OpenClawProvider display model |
+| `OPENCLAW_GATEWAY_URL` | OpenClaw config default | OpenClawProvider via `gatewayUrl`/`url` |
+| `OPENCLAW_GATEWAY_TOKEN` / `OPENCLAW_TOKEN` | _(none)_ | OpenClawProvider env-backed token auth |
+| `OPENCLAW_GATEWAY_PASSWORD` / `OPENCLAW_PASSWORD` | _(none)_ | OpenClawProvider env-backed password auth |
+| `OPENCLAW_SESSION_KEY` | OpenClaw ACP default | OpenClawProvider via `sessionKey` |
+| `OPENCLAW_DEVICE_ID` / `OPENCLAW_DEVICE_PUBLIC_KEY` / `OPENCLAW_DEVICE_PRIVATE_KEY` / `OPENCLAW_DEVICE_TOKEN` | _(none)_ | OpenClawGatewayProvider signed device auth |
+| `OPENCLAW_AGENT_ID` | _(none)_ | OpenClawGatewayProvider |
 
 Model environment variables can also be set via the provider constructor's `model` option. The constructor value takes precedence over the environment variable. For OpenCode, the model must be in `providerID/modelID` format (e.g., `anthropic/claude-sonnet-4-20250514` or `openai/gpt-4o`).
 
@@ -373,6 +382,8 @@ Model environment variables can also be set via the provider constructor's `mode
 
 ```bash
 npm test          # unit tests (types, event mapping, WS, validation, diagnostics, attachments, providers)
+OPENCLAW_ACP_LIVE=1 node --import tsx/esm --test tests/openclaw-acp-live.test.ts     # live OpenClaw ACP bridge smoke, no model turn
+OPENCLAW_LIVE=1 node --import tsx/esm --test tests/openclaw-live.test.ts             # live direct Gateway smoke, no model turn
 npm run test:e2e  # live e2e tests against configured providers (requires CLIs/services installed)
 ```
 

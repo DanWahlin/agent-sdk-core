@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import type { AgentEvent } from '../src/types/events.ts';
-import { OpenClawProvider, buildOpenClawDeviceAuthPayloadV3, mapOpenClawChatEvent, extractOpenClawText } from '../src/providers/openclaw.ts';
+import { OpenClawGatewayProvider as OpenClawProvider, buildOpenClawDeviceAuthPayloadV3, mapOpenClawChatEvent, extractOpenClawText } from '../src/providers/openclaw-gateway.ts';
 
 type SentFrame = { type: 'req'; id: string; method: string; params?: Record<string, unknown> };
 type IncomingFrame = Record<string, unknown>;

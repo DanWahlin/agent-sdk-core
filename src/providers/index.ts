@@ -4,6 +4,7 @@ export { CodexProvider } from './codex.js';
 export { OpenCodeProvider } from './opencode.js';
 export { HermesProvider } from './hermes.js';
 export { OpenClawProvider } from './openclaw.js';
+export { OpenClawGatewayProvider } from './openclaw-gateway.js';
 export { detectAgents } from './detection.js';
 export { ProgressAggregator } from './progress.js';
 export { diagnoseError, formatDiagnostic } from './diagnostics.js';

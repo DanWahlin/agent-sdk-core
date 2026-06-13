@@ -147,6 +147,18 @@ describe('AgentSessionConfig', () => {
   });
 });
 
+describe('Provider exports', () => {
+  it('should export default OpenClaw ACP provider and direct Gateway fallback provider', async () => {
+    const root = await import('../src/index.ts');
+    const providers = await import('../src/providers/index.ts');
+
+    assert.equal(typeof root.OpenClawProvider, 'function');
+    assert.equal(typeof root.OpenClawGatewayProvider, 'function');
+    assert.equal(typeof providers.OpenClawProvider, 'function');
+    assert.equal(typeof providers.OpenClawGatewayProvider, 'function');
+  });
+});
+
 describe('detectAgents', () => {
   it('should return an array of AgentInfo', async () => {
     // This test runs against the real system — agents may or may not be installed

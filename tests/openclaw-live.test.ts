@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { OpenClawProvider } from '../src/providers/openclaw.ts';
+import { OpenClawGatewayProvider as OpenClawProvider } from '../src/providers/openclaw-gateway.ts';
 
 const LIVE_ENABLED = process.env.OPENCLAW_LIVE === '1';
 const LIVE_CHAT_ENABLED = process.env.OPENCLAW_LIVE_CHAT === '1';
