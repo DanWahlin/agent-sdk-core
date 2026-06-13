@@ -20,12 +20,13 @@ async function checkCLI(command: string): Promise<{ installed: boolean; version?
 }
 
 export async function detectAgents(): Promise<AgentInfo[]> {
-  const [copilotCheck, claudeCheck, codexCheck, opencodeCheck, hermesCheck] = await Promise.all([
+  const [copilotCheck, claudeCheck, codexCheck, opencodeCheck, hermesCheck, openclawCheck] = await Promise.all([
     checkCLI('copilot'),
     checkCLI('claude'),
     checkCLI('codex'),
     checkCLI('opencode'),
     checkCLI('hermes'),
+    checkCLI('openclaw'),
   ]);
 
   const agents: AgentInfo[] = [];
@@ -78,6 +79,14 @@ export async function detectAgents(): Promise<AgentInfo[]> {
     available: hermesCheck.installed,
     version: hermesCheck.version,
     reason: hermesCheck.installed ? undefined : 'Hermes CLI not found in PATH',
+  });
+
+  agents.push({
+    name: 'openclaw',
+    displayName: 'OpenClaw',
+    available: openclawCheck.installed,
+    version: openclawCheck.version,
+    reason: openclawCheck.installed ? undefined : 'OpenClaw CLI not found in PATH',
   });
 
   return agents;

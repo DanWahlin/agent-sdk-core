@@ -68,7 +68,7 @@ interface RegisteredSession {
   rejectInFlight?: (error: Error) => void;
 }
 
-const CLIENT_VERSION = '0.4.1';
+const CLIENT_VERSION = '0.5.0';
 const SAFE_ENV_PREFIXES = ['HERMES_'];
 const SAFE_ENV_KEYS = new Set([
   'PATH',

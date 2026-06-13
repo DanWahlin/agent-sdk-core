@@ -153,13 +153,14 @@ describe('detectAgents', () => {
     const { detectAgents } = await import('../src/providers/detection.ts');
     const agents = await detectAgents();
     assert.ok(Array.isArray(agents));
-    assert.equal(agents.length, 5);
+    assert.equal(agents.length, 6);
     const names = agents.map(a => a.name);
     assert.ok(names.includes('copilot'));
     assert.ok(names.includes('claude'));
     assert.ok(names.includes('codex'));
     assert.ok(names.includes('opencode'));
     assert.ok(names.includes('hermes'));
+    assert.ok(names.includes('openclaw'));
     for (const agent of agents) {
       assert.equal(typeof agent.available, 'boolean');
       assert.equal(typeof agent.displayName, 'string');

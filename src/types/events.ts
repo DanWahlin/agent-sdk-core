@@ -25,6 +25,8 @@ export interface AgentEventMetadata {
   testsPassing?: number;
   /** For test_result: number of tests failing */
   testsFailing?: number;
+  /** For output deltas that replace the prior text snapshot instead of appending. */
+  replace?: boolean;
 }
 
 export interface AgentEvent {
