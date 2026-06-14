@@ -1,6 +1,6 @@
 {
   "name": "@codewithdan/agent-sdk-core",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex, OpenCode, Hermes, OpenClaw)",
   "type": "module",
   "main": "dist/index.js",
