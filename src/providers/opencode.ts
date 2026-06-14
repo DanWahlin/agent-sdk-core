@@ -1,3 +1,4 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { v4 as uuid } from 'uuid';
 import type { OpencodeClient } from '@opencode-ai/sdk';
 import type { Event as OpenCodeEvent, Part as OpenCodePart } from '@opencode-ai/sdk';
@@ -39,7 +40,8 @@ export class OpenCodeProvider implements AgentProvider {
   readonly model: string;
 
   private client: OpencodeClient | null = null;
-  private server: { url: string; close(): void } | null = null;
+  private server: { url: string; close(): void | Promise<void> } | null = null;
+  private sessions = new Set<AgentSession>();
   private providerID?: string;
   private modelID?: string;
   private baseUrl?: string;
@@ -60,24 +62,28 @@ export class OpenCodeProvider implements AgentProvider {
   }
 
   async start(): Promise<void> {
-    const { createOpencode, createOpencodeClient } = await import('@opencode-ai/sdk');
+    const { createOpencodeClient } = await import('@opencode-ai/sdk');
     if (this.baseUrl) {
       this.client = createOpencodeClient({ baseUrl: this.baseUrl });
       console.log(`[opencode-provider] connected to existing server at ${this.baseUrl}`);
     } else {
-      const result = await createOpencode({
-        hostname: this.hostname,
-        ...(this.port ? { port: this.port } : {}),
-      });
-      this.client = result.client;
-      this.server = result.server;
-      console.log(`[opencode-provider] server started at ${result.server.url} (model: ${this.model})`);
+      const server = await startManagedOpenCodeServer(this.hostname, this.port);
+      this.client = createOpencodeClient({ baseUrl: server.url });
+      this.server = {
+        url: server.url,
+        close: () => stopManagedOpenCodeServer(server.process),
+      };
+      console.log(`[opencode-provider] server started at ${server.url} (model: ${this.model})`);
     }
   }
 
   async stop(): Promise<void> {
+    const sessions = [...this.sessions];
+    this.sessions.clear();
+    await Promise.allSettled(sessions.map(session => session.destroy()));
+
     if (this.server) {
-      this.server.close();
+      await this.server.close();
       this.server = null;
     }
     this.client = null;
@@ -118,11 +124,16 @@ export class OpenCodeProvider implements AgentProvider {
     // Subscribe to SSE for real-time events
     let sseStream: AsyncGenerator<OpenCodeEvent> | null = null;
     let sseLoopDone: Promise<void> | null = null;
+    let sseAbortController: AbortController | null = null;
     let hasSse = false;
     let destroyed = false;
 
     try {
-      const sse = await client.event.subscribe();
+      sseAbortController = new AbortController();
+      const sse = await client.event.subscribe({
+        signal: sseAbortController.signal,
+        sseMaxRetryAttempts: 0,
+      });
       sseStream = sse.stream as AsyncGenerator<OpenCodeEvent>;
       hasSse = true;
       sseLoopDone = (async () => {
@@ -226,6 +237,10 @@ export class OpenCodeProvider implements AgentProvider {
 
       async destroy(): Promise<void> {
         destroyed = true;
+        if (sseAbortController) {
+          sseAbortController.abort();
+          sseAbortController = null;
+        }
         if (sseStream) {
           try { await sseStream.return(undefined as never); } catch { /* ignore */ }
           sseStream = null;
@@ -233,10 +248,13 @@ export class OpenCodeProvider implements AgentProvider {
         if (sseLoopDone) {
           try { await sseLoopDone; } catch { /* ignore */ }
         }
+        sessions.delete(agentSession);
         try { await client.session.delete({ path: { id: sessionId } }); } catch { /* ignore */ }
       },
     };
 
+    this.sessions.add(agentSession);
+    const sessions = this.sessions;
     return agentSession;
   }
 }
@@ -332,6 +350,71 @@ export function mapOpenCodeEvent(
 
     default:
       break;
+  }
+}
+
+/**
+ * Start OpenCode in its own process group so stop() can terminate both the
+ * Node wrapper and the underlying .opencode child. The upstream SDK only kills
+ * the wrapper process, which can leave .opencode listening on port 4096.
+ */
+async function startManagedOpenCodeServer(hostname: string, port: number): Promise<{
+  url: string;
+  process: ChildProcessWithoutNullStreams;
+}> {
+  const args = ['serve', `--hostname=${hostname}`, `--port=${port}`];
+  const proc = spawn('opencode', args, {
+    detached: true,
+    env: process.env,
+  });
+
+  const url = await new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout waiting for OpenCode server to start after 5000ms'));
+    }, 5000);
+    let settled = false;
+    let output = '';
+
+    function settle(fn: () => void): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn();
+    }
+
+    proc.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+      const match = output.match(/opencode server listening on\s+(https?:\/\/[^\s]+)/);
+      if (match) {
+        settle(() => resolve(match[1]));
+      }
+    });
+
+    proc.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+
+    proc.on('exit', (code) => {
+      settle(() => reject(new Error(`OpenCode server exited with code ${code}${output.trim() ? `\nServer output: ${output}` : ''}`)));
+    });
+    proc.on('error', (error) => {
+      settle(() => reject(error));
+    });
+  });
+
+  return { url, process: proc };
+}
+
+async function stopManagedOpenCodeServer(proc: ChildProcessWithoutNullStreams): Promise<void> {
+  if (!proc.killed) {
+    try { process.kill(-proc.pid!, 'SIGTERM'); } catch { proc.kill(); }
+  }
+  await Promise.race([
+    new Promise<void>((resolve) => proc.once('exit', () => resolve())),
+    new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+  ]);
+  if (proc.exitCode === null && proc.signalCode === null) {
+    try { process.kill(-proc.pid!, 'SIGKILL'); } catch { proc.kill('SIGKILL'); }
   }
 }
 

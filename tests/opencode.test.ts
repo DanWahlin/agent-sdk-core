@@ -1,5 +1,7 @@
 import { describe, it, mock, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 import { mapOpenCodeEvent } from '../src/providers/opencode.ts';
 import type { AgentEvent } from '../src/types/events.ts';
 
@@ -51,6 +53,112 @@ describe('OpenCodeProvider construction', () => {
       }),
       { message: /not initialized/ },
     );
+  });
+
+  async function withOpenSseTestServer(test: (baseUrl: string, state: { sseStarted: () => boolean; sseClosed: () => boolean }) => Promise<void>): Promise<void> {
+    let sseStarted = false;
+    let sseClosed = false;
+
+    const server = http.createServer((req, res) => {
+      if (req.method === 'POST' && req.url === '/session') {
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ id: 'sess-1' }));
+        return;
+      }
+
+      if (req.method === 'GET' && req.url === '/event') {
+        sseStarted = true;
+        req.on('close', () => { sseClosed = true; });
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        res.write(': connected\n\n');
+        return;
+      }
+
+      if (req.method === 'DELETE' && req.url === '/session/sess-1') {
+        res.setHeader('content-type', 'application/json');
+        res.end('true');
+        return;
+      }
+
+      res.statusCode = 404;
+      res.end('{}');
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const address = server.address();
+      assert.ok(address && typeof address === 'object');
+      await test(`http://127.0.0.1:${address.port}`, {
+        sseStarted: () => sseStarted,
+        sseClosed: () => sseClosed,
+      });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+
+  async function waitFor(predicate: () => boolean): Promise<void> {
+    for (let i = 0; i < 10 && !predicate(); i++) {
+      await delay(10);
+    }
+  }
+
+  it('should destroy sessions without hanging on an open SSE stream', async () => {
+    const mod = await import('../src/providers/opencode.ts');
+
+    await withOpenSseTestServer(async (baseUrl, state) => {
+      const provider = new mod.OpenCodeProvider({ baseUrl });
+      await provider.start();
+      const session = await provider.createSession({
+        contextId: 'ctx-1',
+        workingDirectory: '/tmp',
+        systemPrompt: 'test',
+        onEvent: () => {},
+      });
+      await waitFor(state.sseStarted);
+      assert.equal(state.sseStarted(), true);
+
+      const destroyResult = await Promise.race([
+        session.destroy().then(() => 'destroyed'),
+        delay(500).then(() => 'timed-out'),
+      ]);
+
+      assert.equal(destroyResult, 'destroyed');
+      await waitFor(state.sseClosed);
+      assert.equal(state.sseClosed(), true);
+      await provider.stop();
+    });
+  });
+
+  it('should stop cleanly when sessions are still open', async () => {
+    const mod = await import('../src/providers/opencode.ts');
+
+    await withOpenSseTestServer(async (baseUrl, state) => {
+      const provider = new mod.OpenCodeProvider({ baseUrl });
+      await provider.start();
+      await provider.createSession({
+        contextId: 'ctx-1',
+        workingDirectory: '/tmp',
+        systemPrompt: 'test',
+        onEvent: () => {},
+      });
+      await waitFor(state.sseStarted);
+      assert.equal(state.sseStarted(), true);
+
+      const stopResult = await Promise.race([
+        provider.stop().then(() => 'stopped'),
+        delay(500).then(() => 'timed-out'),
+      ]);
+
+      assert.equal(stopResult, 'stopped');
+      await waitFor(state.sseClosed);
+      assert.equal(state.sseClosed(), true);
+    });
   });
 });
 
