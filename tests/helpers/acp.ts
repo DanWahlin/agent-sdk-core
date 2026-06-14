@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, symlink, writeFile } from 'fs/promises';
 import { PassThrough } from 'stream';
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
@@ -97,8 +97,12 @@ export async function assertAcpAttachmentBlocks(
   await mkdir('/tmp/project', { recursive: true });
   await writeFile(filePath, options.fileContent);
 
+  const localImageData = Buffer.from('local image').toString('base64');
+  const localImagePath = '/tmp/project/local.png';
+  await writeFile(localImagePath, Buffer.from('local image'));
   const blocks = await options.buildBlocks('hello', [
     { type: 'base64_image', data: imageData, mediaType: 'image/png', displayName: 'Screenshot' },
+    { type: 'local_image', path: localImagePath, displayName: 'local.png' },
     { type: 'file', path: filePath, mediaType: 'text/plain', displayName: 'context.txt' },
     { type: 'base64_blob', data: blobData, mediaType: 'application/pdf', displayName: 'spec.pdf' },
   ], '/tmp/project');
@@ -106,6 +110,8 @@ export async function assertAcpAttachmentBlocks(
   assert.deepEqual(blocks, [
     { type: 'text', text: '[Screenshot]' },
     { type: 'image', data: imageData, mimeType: 'image/png' },
+    { type: 'text', text: '[local.png]' },
+    { type: 'image', data: localImageData, mimeType: 'image/png' },
     { type: 'text', text: '[context.txt]' },
     {
       type: 'resource',
@@ -134,6 +140,29 @@ export async function assertRejectsOutOfBoundaryFileAttachment(
   await assert.rejects(
     () => buildBlocks('hello', [{ type: 'file', path: '/etc/passwd' }], '/tmp/project'),
     { message: /outside working directory/ },
+  );
+}
+
+export async function assertRejectsSymlinkEscapes(
+  buildBlocks: (prompt: string, attachments: AgentAttachment[] | undefined, workingDirectory: string) => Promise<unknown[]>,
+): Promise<void> {
+  await mkdir('/tmp/project', { recursive: true });
+  await writeFile('/tmp/outside-secret.txt', 'outside secret');
+  await writeFile('/tmp/outside-image.png', Buffer.from('outside image'));
+  await symlink('/tmp/outside-secret.txt', '/tmp/project/escape.txt').catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error;
+  });
+  await symlink('/tmp/outside-image.png', '/tmp/project/escape.png').catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error;
+  });
+
+  await assert.rejects(
+    () => buildBlocks('hello', [{ type: 'file', path: '/tmp/project/escape.txt' }], '/tmp/project'),
+    { message: /outside working directory|symlink/i },
+  );
+  await assert.rejects(
+    () => buildBlocks('hello', [{ type: 'local_image', path: '/tmp/project/escape.png' }], '/tmp/project'),
+    { message: /outside working directory|symlink/i },
   );
 }
 

@@ -38,9 +38,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install peer dependencies for type checking
-        run: npm install --no-save @github/copilot-sdk @anthropic-ai/claude-agent-sdk @openai/codex-sdk ws
-
       - name: Type check
         run: npx tsc --noEmit
 
@@ -74,9 +71,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install peer dependencies for build
-        run: npm install --no-save @github/copilot-sdk @anthropic-ai/claude-agent-sdk @openai/codex-sdk ws
 
       - name: Build
         run: npm run build

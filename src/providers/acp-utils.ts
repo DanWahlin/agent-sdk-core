@@ -33,7 +33,7 @@ export async function buildAcpPromptBlocks(
 
     if (attachment.type === 'local_image') {
       const image = await readLocalImageAttachment(attachment, workingDirectory, providerLabel);
-      blocks.push({ type: 'image', data: image.data, mimeType: image.mimeType, uri: image.path });
+      blocks.push({ type: 'image', data: image.data, mimeType: image.mimeType });
       continue;
     }
 

@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises';
+import { lstat, readFile, realpath } from 'fs/promises';
 import { basename, extname } from 'path';
 import type { AgentAttachment } from '../types/providers.js';
 import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
@@ -38,15 +38,16 @@ export async function readLocalImageAttachment(
   if (!isPathWithinBoundary(attachment.path, workingDirectory)) {
     throw new Error(`${providerLabel} blocked image attachment outside working directory: ${attachment.path}`);
   }
-  const mimeType = LOCAL_IMAGE_MIME_TYPES[extname(attachment.path).toLowerCase()];
+  const safePath = await resolveSafeAttachmentPath(attachment.path, workingDirectory, providerLabel, 'image');
+  const mimeType = LOCAL_IMAGE_MIME_TYPES[extname(safePath).toLowerCase()];
   if (!mimeType) {
     throw new Error(`${providerLabel} rejected unsupported image attachment: ${attachment.path}`);
   }
-  const data = (await readFile(attachment.path)).toString('base64');
+  const data = (await readFile(safePath)).toString('base64');
   if (!isAttachmentSizeValid(data)) {
     throw new Error(`${providerLabel} rejected oversized image attachment.`);
   }
-  return { path: attachment.path, data, mimeType };
+  return { path: safePath, data, mimeType };
 }
 
 export async function readFileAttachment(
@@ -60,18 +61,39 @@ export async function readFileAttachment(
   if (!isPathWithinBoundary(attachment.path, workingDirectory)) {
     throw new Error(`${providerLabel} blocked file attachment outside working directory: ${attachment.path}`);
   }
-  const data = (await readFile(attachment.path)).toString('base64');
+  const safePath = await resolveSafeAttachmentPath(attachment.path, workingDirectory, providerLabel, 'file');
+  const data = (await readFile(safePath)).toString('base64');
   if (!isAttachmentSizeValid(data)) {
     throw new Error(`${providerLabel} rejected oversized file attachment.`);
   }
   return {
-    path: attachment.path,
+    path: safePath,
     data,
     mimeType: attachment.mediaType ?? 'application/octet-stream',
     displayName: attachment.displayName ?? basename(attachment.path),
   };
 }
 
+export async function resolveSafeAttachmentPath(
+  filePath: string,
+  workingDirectory: string,
+  providerLabel: string,
+  attachmentKind: 'file' | 'image',
+): Promise<string> {
+  const stat = await lstat(filePath);
+  if (stat.isSymbolicLink()) {
+    throw new Error(`${providerLabel} blocked ${attachmentKind} attachment symlink outside working directory: ${filePath}`);
+  }
+
+  const [realFilePath, realWorkingDirectory] = await Promise.all([
+    realpath(filePath),
+    realpath(workingDirectory),
+  ]);
+  if (!isPathWithinBoundary(realFilePath, realWorkingDirectory)) {
+    throw new Error(`${providerLabel} blocked ${attachmentKind} attachment outside working directory: ${filePath}`);
+  }
+  return realFilePath;
+}
 export function requireBase64BlobAttachment(
   attachment: AgentAttachment,
   providerLabel: string,

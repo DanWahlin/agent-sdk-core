@@ -11,6 +11,7 @@ import {
   FakeAcpProcess,
   assertAcpAttachmentBlocks,
   assertRejectsOutOfBoundaryFileAttachment,
+  assertRejectsSymlinkEscapes,
   collectEvents,
   registerAbortAndExitTests,
   respondToInitializeRequest,
@@ -96,6 +97,10 @@ describe('Hermes ACP helpers', () => {
 
   it('should reject file attachments outside the working directory', async () => {
     await assertRejectsOutOfBoundaryFileAttachment(buildAcpPromptBlocks);
+  });
+
+  it('should reject symlink attachments that escape the working directory', async () => {
+    await assertRejectsSymlinkEscapes(buildAcpPromptBlocks);
   });
 });
 

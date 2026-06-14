@@ -10,6 +10,7 @@ import {
   FakeAcpProcess,
   assertAcpAttachmentBlocks,
   assertRejectsOutOfBoundaryFileAttachment,
+  assertRejectsSymlinkEscapes,
   collectEvents,
   registerAbortAndExitTests,
   respondToInitializeRequest,
@@ -148,6 +149,10 @@ describe('OpenClaw ACP helpers', () => {
 
   it('should reject file attachments outside the working directory', async () => {
     await assertRejectsOutOfBoundaryFileAttachment(buildOpenClawAcpPromptBlocks);
+  });
+
+  it('should reject symlink attachments that escape the working directory', async () => {
+    await assertRejectsSymlinkEscapes(buildOpenClawAcpPromptBlocks);
   });
 });
 
