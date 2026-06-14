@@ -58,6 +58,38 @@ describe('CopilotProvider image attachments', () => {
     (provider as any).client = mockClient;
   });
 
+  async function capturePermissionHandler(
+    permissionDecision: 'approved' | 'denied-by-rules',
+  ): Promise<(req: { kind: string }) => unknown> {
+    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
+    (provider as any).client = {
+      createSession: async (config: any) => {
+        permissionHandler = config.onPermissionRequest;
+        return {
+          sessionId: 'mock-copilot-session',
+          on: (_cb: unknown) => () => {},
+          sendAndWait: async () => undefined,
+          abort: async () => {},
+          disconnect: async () => {},
+          destroy: async () => {},
+        };
+      },
+    };
+
+    await provider.createSession({
+      contextId: 'test-ctx',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent: () => {},
+      hooks: {
+        onPermissionRequest: () => ({ kind: permissionDecision }),
+      },
+    });
+
+    assert.ok(permissionHandler);
+    return permissionHandler;
+  }
+
   it('should send base64_image as a native blob attachment on execute()', async () => {
     const { events, onEvent } = collectEvents();
     const session = await provider.createSession({
@@ -239,61 +271,13 @@ describe('CopilotProvider image attachments', () => {
   });
 
   it('should map legacy approved permission hooks to Copilot SDK approve-once decisions', async () => {
-    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
-    (provider as any).client = {
-      createSession: async (config: any) => {
-        permissionHandler = config.onPermissionRequest;
-        return {
-          sessionId: 'mock-copilot-session',
-          on: (_cb: unknown) => () => {},
-          sendAndWait: async () => undefined,
-          abort: async () => {},
-          disconnect: async () => {},
-          destroy: async () => {},
-        };
-      },
-    };
-
-    await provider.createSession({
-      contextId: 'test-ctx',
-      workingDirectory: '/tmp',
-      systemPrompt: 'test',
-      onEvent: () => {},
-      hooks: {
-        onPermissionRequest: () => ({ kind: 'approved' }),
-      },
-    });
-
-    assert.deepEqual(permissionHandler!({ kind: 'shell' }), { kind: 'approve-once' });
+    const permissionHandler = await capturePermissionHandler('approved');
+    assert.deepEqual(permissionHandler({ kind: 'shell' }), { kind: 'approve-once' });
   });
 
   it('should map legacy denied permission hooks to Copilot SDK reject decisions', async () => {
-    let permissionHandler: ((req: { kind: string }) => unknown) | undefined;
-    (provider as any).client = {
-      createSession: async (config: any) => {
-        permissionHandler = config.onPermissionRequest;
-        return {
-          sessionId: 'mock-copilot-session',
-          on: (_cb: unknown) => () => {},
-          sendAndWait: async () => undefined,
-          abort: async () => {},
-          disconnect: async () => {},
-          destroy: async () => {},
-        };
-      },
-    };
-
-    await provider.createSession({
-      contextId: 'test-ctx',
-      workingDirectory: '/tmp',
-      systemPrompt: 'test',
-      onEvent: () => {},
-      hooks: {
-        onPermissionRequest: () => ({ kind: 'denied-by-rules' }),
-      },
-    });
-
-    assert.deepEqual(permissionHandler!({ kind: 'shell' }), { kind: 'reject' });
+    const permissionHandler = await capturePermissionHandler('denied-by-rules');
+    assert.deepEqual(permissionHandler({ kind: 'shell' }), { kind: 'reject' });
   });
 });
 
@@ -528,34 +512,64 @@ describe('CodexProvider image attachments', () => {
 // ══════════════════════════════════════════════════════════════════════
 
 describe('OpenCodeProvider image attachments', () => {
-  it('should warn when attachments are passed to execute()', async () => {
+  async function createOpenCodeSession() {
+    const prompts: unknown[] = [];
+    const { OpenCodeProvider } = await import('../src/providers/opencode.ts');
+    const provider = new OpenCodeProvider({ model: 'anthropic/claude-sonnet-4-20250514' });
+    (provider as any).client = {
+      session: {
+        create: async () => ({ data: { id: 'opencode-session' } }),
+        prompt: async (params: unknown) => {
+          prompts.push(params);
+          return { data: { parts: [] } };
+        },
+        delete: async () => ({}),
+      },
+      event: {
+        subscribe: async () => { throw new Error('SSE disabled for attachment test'); },
+      },
+    };
+    const session = await provider.createSession({
+      contextId: 'opencode-attachments',
+      workingDirectory: '/tmp',
+      systemPrompt: 'test',
+      onEvent: () => {},
+    });
+    return { session, prompts };
+  }
+
+  it('should warn and ignore attachments passed to execute()', async () => {
     const warnings: string[] = [];
     const origWarn = console.warn;
-    console.warn = (msg: string) => { warnings.push(msg); origWarn(msg); };
-
+    console.warn = (msg: string) => { warnings.push(msg); };
     try {
-      const { OpenCodeProvider } = await import('../src/providers/opencode.ts');
-      const provider = new OpenCodeProvider({ model: 'anthropic/claude-sonnet-4-20250514' });
+      const { session, prompts } = await createOpenCodeSession();
+      const result = await session.execute('plain prompt', [makeImageAttachment()]);
+      await session.destroy();
 
-      // We can't call execute without a running server, but we can verify
-      // the warning path by checking the interface accepts attachments
-      // and the provider code warns. Test the signature compatibility:
-      const session = {
-        execute: provider.createSession.toString(),
-      };
-      assert.ok(session.execute.includes('attachments'));
-      assert.ok(session.execute.includes('attachments are not supported by OpenCode'));
+      assert.equal(result.status, 'complete');
+      assert.ok(warnings.some(warning => warning.includes('attachments are not supported by OpenCode')));
+      assert.equal(prompts.length, 1);
+      assert.deepEqual((prompts[0] as any).body.parts, [{ type: 'text', text: 'plain prompt' }]);
     } finally {
       console.warn = origWarn;
     }
   });
 
-  it('should warn when attachments are passed to send()', async () => {
-    const { OpenCodeProvider } = await import('../src/providers/opencode.ts');
-    const provider = new OpenCodeProvider({ model: 'anthropic/claude-sonnet-4-20250514' });
+  it('should warn and ignore attachments passed to send()', async () => {
+    const warnings: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (msg: string) => { warnings.push(msg); };
+    try {
+      const { session, prompts } = await createOpenCodeSession();
+      await session.send('follow up', [makeImageAttachment()]);
+      await session.destroy();
 
-    // Verify the send path also includes the warning
-    const sourceCode = provider.createSession.toString();
-    assert.ok(sourceCode.includes('attachments are not supported by OpenCode'));
+      assert.ok(warnings.some(warning => warning.includes('attachments are not supported by OpenCode')));
+      assert.equal(prompts.length, 1);
+      assert.deepEqual((prompts[0] as any).body.parts, [{ type: 'text', text: 'follow up' }]);
+    } finally {
+      console.warn = origWarn;
+    }
   });
 });

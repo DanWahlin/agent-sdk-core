@@ -33,10 +33,10 @@ describe('OpenCodeProvider construction', () => {
     assert.equal(provider.model, 'openai/gpt-4/turbo');
   });
 
-  it('should use default model when none provided', async () => {
+  it('should use provider-configured default model when none provided', async () => {
     const mod = await import('../src/providers/opencode.ts');
     const provider = new mod.OpenCodeProvider();
-    assert.ok(provider.model.includes('/'));
+    assert.equal(provider.model, 'configured default');
   });
 
   it('should throw if createSession called before start', async () => {

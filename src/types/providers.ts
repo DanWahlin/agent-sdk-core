@@ -1,4 +1,5 @@
-import type { AgentType, AgentEvent } from '../index.js';
+import type { AgentType } from './agents.js';
+import type { AgentEvent } from './events.js';
 
 export interface AgentResult {
   status: 'complete' | 'failed';

@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { Codex } from '@openai/codex-sdk';
+import type { Codex } from '@openai/codex-sdk';
 import type { AgentType } from '../types/agents.js';
 import type {
   AgentProvider,
@@ -28,12 +28,15 @@ export class CodexProvider implements AgentProvider {
   readonly model: string;
 
   private codex: Codex | null = null;
+  private modelOverride?: string;
 
   constructor(options?: CodexProviderOptions) {
-    this.model = options?.model || process.env.CODEX_MODEL || 'gpt-5.2-codex';
+    this.modelOverride = options?.model || process.env.CODEX_MODEL;
+    this.model = this.modelOverride || 'configured default';
   }
 
   async start(): Promise<void> {
+    const { Codex } = await import('@openai/codex-sdk');
     this.codex = new Codex();
     console.log(`[codex-provider] SDK initialized (model: ${this.model})`);
   }
@@ -48,7 +51,7 @@ export class CodexProvider implements AgentProvider {
     }
 
     const threadOptions = {
-      model: this.model,
+      ...(this.modelOverride ? { model: this.modelOverride } : {}),
       workingDirectory: config.workingDirectory,
       skipGitRepoCheck: true,
       sandboxMode: 'workspace-write' as const,

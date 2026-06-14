@@ -1,6 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { SpawnOptions, SpawnedProcess } from '@anthropic-ai/claude-agent-sdk';
+import type { query as claudeQuery, SpawnOptions, SpawnedProcess } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentType } from '../types/agents.js';
 import type {
   AgentProvider,
@@ -77,9 +76,11 @@ export class ClaudeProvider implements AgentProvider {
   readonly model: string;
   private permissionMode: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
   private spawnFn?: (options: SpawnOptions) => SpawnedProcess;
+  private modelOverride?: string;
 
   constructor(options?: ClaudeProviderOptions) {
-    this.model = options?.model || process.env.CLAUDE_MODEL || 'claude-opus-4-20250514';
+    this.modelOverride = options?.model || process.env.CLAUDE_MODEL;
+    this.model = this.modelOverride || 'configured default';
     this.permissionMode = options?.permissionMode || 'acceptEdits';
     this.spawnFn = options?.spawnClaudeCodeProcess;
   }
@@ -93,7 +94,7 @@ export class ClaudeProvider implements AgentProvider {
   }
 
   async createSession(config: AgentSessionConfig): Promise<AgentSession> {
-    const model = this.model;
+    const model = this.modelOverride;
     const permissionMode = this.permissionMode;
     const spawnFn = this.spawnFn;
     let sessionId: string | null = config.resumeSessionId || null;
@@ -115,13 +116,14 @@ export class ClaudeProvider implements AgentProvider {
       contextId: string,
     ): Promise<AgentResult> {
       let result: AgentResult = { status: 'complete' };
+      const { query } = await import('@anthropic-ai/claude-agent-sdk');
       const contentBlocks = buildContentBlocks(prompt, attachments);
-      const messageGenerator = createMessageGenerator(contentBlocks) as Parameters<typeof query>[0]['prompt'];
+      const messageGenerator = createMessageGenerator(contentBlocks) as Parameters<typeof claudeQuery>[0]['prompt'];
 
       const response = query({
         prompt: messageGenerator,
         options: {
-          model,
+          ...(model ? { model } : {}),
           cwd: config.workingDirectory,
           permissionMode,
           systemPrompt: config.systemPrompt,

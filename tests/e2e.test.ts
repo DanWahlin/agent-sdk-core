@@ -8,12 +8,19 @@ import { detectAgents } from '../dist/providers/detection.js';
 import type { AgentEvent } from '../src/types/events.ts';
 import type { AgentProvider } from '../src/types/providers.ts';
 
-// These tests call real agent CLIs. Skip if not available.
+// These tests call real agent CLIs and model services. They are opt-in so
+// a machine with a CLI installed but missing auth/model access doesn't fail
+// normal verification. Set <PROVIDER>_E2E=1 for each provider to exercise.
 const agents = await detectAgents();
-const copilotAvailable = agents.find(a => a.name === 'copilot')?.available ?? false;
-const claudeAvailable = agents.find(a => a.name === 'claude')?.available ?? false;
-const codexAvailable = agents.find(a => a.name === 'codex')?.available ?? false;
-const opencodeAvailable = agents.find(a => a.name === 'opencode')?.available ?? false;
+const copilotAvailable = isLiveProviderEnabled('COPILOT_E2E', 'copilot');
+const claudeAvailable = isLiveProviderEnabled('CLAUDE_E2E', 'claude');
+const codexAvailable = isLiveProviderEnabled('CODEX_E2E', 'codex');
+const opencodeAvailable = isLiveProviderEnabled('OPENCODE_E2E', 'opencode');
+
+function isLiveProviderEnabled(envVar: string, agentName: string): boolean {
+  if (process.env[envVar] !== '1') return false;
+  return agents.find(a => a.name === agentName)?.available ?? false;
+}
 
 /**
  * Shared e2e test suite that runs the same real-world scenarios against any provider.
@@ -24,7 +31,7 @@ function providerE2eSuite(
   createProvider: () => AgentProvider,
   available: boolean,
 ) {
-  describe(`e2e: ${name}`, { skip: !available && `${name} CLI not available` }, () => {
+  describe(`e2e: ${name}`, { skip: !available && `${name} live e2e not enabled or CLI unavailable` }, () => {
     let provider: AgentProvider;
 
     it('should stream events and complete', { timeout: 120_000 }, async () => {

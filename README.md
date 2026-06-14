@@ -27,9 +27,9 @@ Currently used by three projects: [copilot-kanban-agent](https://github.com/DanW
 ## Features
 
 - **Unified Provider Interface** — Single `AgentProvider`/`AgentSession` API that works across Copilot, Claude Code, Codex, OpenCode, Hermes, and OpenClaw
-- **Rich Event Stream** — 10 granular `AgentEvent` types (thinking, output, command, command_output, file_read, file_write, file_edit, tool_call, test_result, error, complete) with metadata for files, diffs, commands, and test results
+- **Rich Event Stream** — 11 granular `AgentEvent` types (thinking, output, command, command_output, file_read, file_write, file_edit, tool_call, test_result, error, complete) with metadata for files, diffs, commands, replacement deltas, and test results
 - **Session Resume** — Continue previous agent sessions via `resumeSessionId` (Copilot `resumeSession()`, Codex `resumeThread()`, Claude `resume` option, OpenCode `session.get()`)
-- **Image/Attachment Support** — Pass screenshots, inline binary payloads, and files via a unified `AgentAttachment` type on both `execute()` and `send()` calls — each provider handles the SDK-specific format (Copilot: native `blob` attachments for base64 image/binary data, Claude: native image blocks, Codex: local_image input). Config-level attachments merge with per-call attachments.
+- **Image/Attachment Support** — Pass screenshots, inline binary payloads, and files via a unified `AgentAttachment` type on both `execute()` and `send()` calls. Copilot accepts native blob/file attachments, Claude accepts native image blocks, Codex accepts local image inputs, and Hermes/OpenClaw ACP accept images plus file/blob resources. Config-level attachments merge with first-call per-message attachments.
 - **Middleware Hooks** — Inject `onPreToolUse` (e.g., worktree path rewriting) and `onPermissionRequest` (e.g., tool deny-lists) without modifying provider code
 - **Agent Detection** — `detectAgents()` checks which CLI tools are installed and available on the system
 - **Progress Aggregator** — Batches events over a configurable interval and produces TTS-friendly summaries ("Reading 3 files", "All 5 tests passing")
@@ -142,7 +142,7 @@ import { WSClient, createWSServer } from '@codewithdan/agent-sdk-core/ws';
 
 ## Event Types
 
-Providers emit `AgentEvent` objects with 10 granular event types:
+Providers emit `AgentEvent` objects with 11 granular event types:
 
 | Type | Description |
 |------|-------------|
@@ -176,6 +176,7 @@ interface AgentEvent {
     error?: string;
     testsPassing?: number;
     testsFailing?: number;
+    replace?: boolean; // output delta replaces prior text snapshot instead of appending
   };
 }
 ```
@@ -241,7 +242,7 @@ const provider = new HermesProvider({
 });
 ```
 
-Features: Agent Client Protocol integration, session resume, image attachments, permission hooks, safe environment forwarding, process cleanup.
+Features: Agent Client Protocol integration, session resume, image/file/blob attachments, permission hooks, safe environment forwarding, process cleanup.
 
 ### OpenClawProvider
 
@@ -254,7 +255,7 @@ const provider = new OpenClawProvider({
 });
 ```
 
-Features: Agent Client Protocol integration through `openclaw acp`, session resume, image attachments, permission hooks, safe environment forwarding, process cleanup, and compatibility aliases for the old Gateway option names (`url`, `token`, `password`). Secrets are passed via child environment variables or token/password files, not process arguments.
+Features: Agent Client Protocol integration through `openclaw acp`, session resume, image/file/blob attachments, permission hooks, safe environment forwarding, process cleanup, and compatibility aliases for the old Gateway option names (`url`, `token`, `password`). Secrets are passed via child environment variables or token/password files, not process arguments.
 
 Use `OpenClawGatewayProvider` only when you need direct Gateway protocol features that ACP intentionally hides, such as `chat.history`, signed device identity auth, replacement-delta metadata, or low-level Gateway run-id diagnostics. The Gateway provider remains exported but is no longer the default `OpenClawProvider` path.
 
@@ -282,7 +283,7 @@ const session = await provider.createSession({
 });
 ```
 
-For Copilot-specific inline binary payloads, you can also pass `type: 'base64_blob'` with any valid MIME type (for example `application/pdf` or `application/octet-stream`). Other providers continue to support their existing attachment formats and may ignore unsupported inline binary types.
+For inline binary payloads, pass `type: 'base64_blob'` with any valid MIME type, for example `application/pdf` or `application/octet-stream`. Copilot forwards these as native blobs. Hermes and OpenClaw ACP convert them into embedded ACP resources. Hermes/OpenClaw ACP also accept `type: 'file'` attachments inside the configured working directory and convert them into embedded resources, while `local_image` is converted into an ACP image block.
 
 ## ProgressAggregator
 
@@ -360,11 +361,11 @@ interface WSMessage<T = unknown> {
 
 | Variable | Default | Used by |
 |----------|---------|---------|
-| `COPILOT_MODEL` | `claude-opus-4-20250514` | CopilotProvider |
+| `COPILOT_MODEL` | SDK configured default | CopilotProvider optional override |
 | `COPILOT_DENIED_TOOLS` | _(none)_ | CopilotProvider |
-| `CLAUDE_MODEL` | `claude-opus-4-20250514` | ClaudeProvider |
-| `CODEX_MODEL` | `gpt-5.2-codex` | CodexProvider |
-| `OPENCODE_MODEL` | `anthropic/claude-sonnet-4-20250514` | OpenCodeProvider |
+| `CLAUDE_MODEL` | Claude Code configured default | ClaudeProvider optional override |
+| `CODEX_MODEL` | Codex configured default | CodexProvider optional override |
+| `OPENCODE_MODEL` | OpenCode configured default | OpenCodeProvider optional override |
 | `HERMES_COMMAND` | `hermes` | HermesProvider |
 | `HERMES_*` | _(none)_ | HermesProvider safe forwarded env |
 | `OPENCLAW_COMMAND` | `openclaw` | OpenClawProvider ACP bridge command |

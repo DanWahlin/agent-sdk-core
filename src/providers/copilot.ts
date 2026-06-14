@@ -1,12 +1,12 @@
 import { v4 as uuid } from 'uuid';
-import {
+import type {
   CopilotClient,
-  type CopilotSession,
-  type MessageOptions,
-  type PermissionRequest,
-  type PermissionRequestResult,
-  type SessionConfig,
-  type SessionEvent,
+  CopilotSession,
+  MessageOptions,
+  PermissionRequest,
+  PermissionRequestResult,
+  SessionConfig,
+  SessionEvent,
 } from '@github/copilot-sdk';
 import type { AgentType } from '../types/agents.js';
 import type {
@@ -68,9 +68,11 @@ export class CopilotProvider implements AgentProvider {
 
   private client: CopilotClient | null = null;
   private deniedTools: Set<string>;
+  private modelOverride?: string;
 
   constructor(options?: CopilotProviderOptions) {
-    this.model = options?.model || process.env.COPILOT_MODEL || 'claude-opus-4-20250514';
+    this.modelOverride = options?.model || process.env.COPILOT_MODEL;
+    this.model = this.modelOverride || 'configured default';
     this.deniedTools = new Set(
       (options?.deniedTools || process.env.COPILOT_DENIED_TOOLS || '')
         .split(',').map(s => s.trim()).filter(Boolean)
@@ -78,6 +80,7 @@ export class CopilotProvider implements AgentProvider {
   }
 
   async start(): Promise<void> {
+    const { CopilotClient } = await import('@github/copilot-sdk');
     this.client = new CopilotClient({
       logLevel: 'info',
     });
@@ -168,7 +171,7 @@ export class CopilotProvider implements AgentProvider {
     };
 
     const sessionConfig = {
-      model: this.model,
+      ...(this.modelOverride ? { model: this.modelOverride } : {}),
       streaming: true,
       workingDirectory: config.workingDirectory,
       systemMessage: {

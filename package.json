@@ -27,20 +27,18 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts tests/hermes.test.ts tests/openclaw-acp.test.ts tests/openclaw-acp-live.test.ts tests/openclaw.test.ts tests/openclaw-live.test.ts tests/attachments.test.ts",
+    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/package-hygiene.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts tests/hermes.test.ts tests/openclaw-acp.test.ts tests/openclaw-acp-live.test.ts tests/openclaw.test.ts tests/openclaw-live.test.ts tests/attachments.test.ts",
     "test:e2e": "node --import tsx/esm --test tests/e2e.test.ts",
     "test:all": "node --import tsx/esm --test tests/*.test.ts"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "peerDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.0 || ^0.3.0",
     "@github/copilot-sdk": "^0.2.0 || ^1.0.0-beta",
     "@openai/codex-sdk": ">=0.80.0",
-    "@opencode-ai/sdk": "^1.0.0",
-    "ws": "^8.0.0"
+    "@opencode-ai/sdk": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "@github/copilot-sdk": {
@@ -54,14 +52,12 @@
     },
     "@opencode-ai/sdk": {
       "optional": true
-    },
-    "ws": {
-      "optional": true
     }
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.22.1",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.142",
@@ -71,15 +67,14 @@
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.21.0",
-    "typescript": "~5.7.0",
-    "ws": "^8.19.0"
+    "typescript": "~5.7.0"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/DanWahlin/agent-sdk-core"
+    "url": "git+https://github.com/DanWahlin/agent-sdk-core.git"
   },
   "license": "MIT"
 }

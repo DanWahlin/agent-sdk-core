@@ -39,3 +39,19 @@ export { ProgressAggregator } from './providers/progress.js';
 export { createHeartbeat, broadcast, createWSServer } from './ws/server.js';
 export { WSClient } from './ws/client.js';
 export { sanitizeJson } from './ws/sanitize.js';
+
+export type { CopilotProviderOptions } from './providers/copilot.js';
+export type { ClaudeProviderOptions } from './providers/claude.js';
+export type { CodexProviderOptions } from './providers/codex.js';
+export type { OpenCodeProviderOptions } from './providers/opencode.js';
+export type { HermesProviderOptions } from './providers/hermes.js';
+export type { OpenClawProviderOptions, OpenClawAcpProvenanceMode } from './providers/openclaw.js';
+export type { OpenClawDeviceIdentity, OpenClawGatewayProviderOptions } from './providers/openclaw-gateway.js';
+
+export { buildContentBlocks } from './providers/claude.js';
+export { createHermesEnvironment, buildAcpPromptBlocks } from './providers/hermes.js';
+export { buildOpenClawAcpArgs, createOpenClawEnvironment, buildOpenClawAcpPromptBlocks } from './providers/openclaw.js';
+export { buildOpenClawDeviceAuthPayloadV3, extractOpenClawText, mapOpenClawChatEvent } from './providers/openclaw-gateway.js';
+export { mapOpenCodeEvent } from './providers/opencode.js';
+export { MAX_ATTACHMENT_SIZE, isAbsolutePath } from './providers/validation.js';
+export { LOCAL_IMAGE_MIME_TYPES as OPENCLAW_GATEWAY_LOCAL_IMAGE_MIME_TYPES } from './providers/openclaw-gateway.js';

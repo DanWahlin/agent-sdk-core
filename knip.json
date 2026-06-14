@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/index.ts",
+    "src/providers/index.ts",
+    "src/types/index.ts",
+    "src/ws/index.ts",
+    "tests/*.test.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "ignoreDependencies": [
+    "@agentclientprotocol/sdk",
+    "uuid",
+    "ws"
+  ]
+}

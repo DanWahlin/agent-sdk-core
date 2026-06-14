@@ -1,5 +1,4 @@
 import { v4 as uuid } from 'uuid';
-import { createOpencode, createOpencodeClient } from '@opencode-ai/sdk';
 import type { OpencodeClient } from '@opencode-ai/sdk';
 import type { Event as OpenCodeEvent, Part as OpenCodePart } from '@opencode-ai/sdk';
 import type { AgentType } from '../types/agents.js';
@@ -41,23 +40,27 @@ export class OpenCodeProvider implements AgentProvider {
 
   private client: OpencodeClient | null = null;
   private server: { url: string; close(): void } | null = null;
-  private providerID: string;
-  private modelID: string;
+  private providerID?: string;
+  private modelID?: string;
   private baseUrl?: string;
   private hostname: string;
   private port: number;
 
   constructor(options?: OpenCodeProviderOptions) {
-    this.model = options?.model || process.env.OPENCODE_MODEL || 'anthropic/claude-sonnet-4-20250514';
-    const [providerID, ...rest] = this.model.split('/');
-    this.providerID = providerID;
-    this.modelID = rest.join('/');
+    const configuredModel = options?.model || process.env.OPENCODE_MODEL;
+    this.model = configuredModel || 'configured default';
+    if (configuredModel) {
+      const [providerID, ...rest] = configuredModel.split('/');
+      this.providerID = providerID;
+      this.modelID = rest.join('/');
+    }
     this.baseUrl = options?.baseUrl;
     this.hostname = options?.hostname || '127.0.0.1';
     this.port = options?.port || 0;
   }
 
   async start(): Promise<void> {
+    const { createOpencode, createOpencodeClient } = await import('@opencode-ai/sdk');
     if (this.baseUrl) {
       this.client = createOpencodeClient({ baseUrl: this.baseUrl });
       console.log(`[opencode-provider] connected to existing server at ${this.baseUrl}`);
@@ -86,8 +89,9 @@ export class OpenCodeProvider implements AgentProvider {
     }
 
     const client = this.client;
-    const providerID = this.providerID;
-    const modelID = this.modelID;
+    const model = this.providerID && this.modelID
+      ? { providerID: this.providerID, modelID: this.modelID }
+      : undefined;
 
     // Create or resume session
     let sessionId: string;
@@ -151,7 +155,7 @@ export class OpenCodeProvider implements AgentProvider {
           const result = await client.session.prompt({
             path: { id: sessionId },
             body: {
-              model: { providerID, modelID },
+              ...(model ? { model } : {}),
               parts: [{ type: 'text', text: prompt }],
               ...(isFirstPrompt && config.systemPrompt ? { system: config.systemPrompt } : {}),
             },
@@ -199,7 +203,7 @@ export class OpenCodeProvider implements AgentProvider {
           const result = await client.session.prompt({
             path: { id: sessionId },
             body: {
-              model: { providerID, modelID },
+              ...(model ? { model } : {}),
               parts: [{ type: 'text', text: message }],
             },
           });

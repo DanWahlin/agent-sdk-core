@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import { readFile } from 'fs/promises';
 import { extname } from 'path';
 import { v4 as uuid } from 'uuid';
-import WebSocket from 'ws';
 import type { AgentType } from '../types/agents.js';
 import type {
   AgentProvider,
@@ -21,7 +20,7 @@ const DEFAULT_GATEWAY_URL = 'ws://127.0.0.1:18789';
 const DEFAULT_SESSION_KEY = 'main';
 const DEFAULT_SCOPES = ['operator.read', 'operator.write'];
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
-const LOCAL_IMAGE_MIME_TYPES: Record<string, string> = {
+export const LOCAL_IMAGE_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -148,7 +147,7 @@ export class OpenClawGatewayProvider implements AgentProvider {
   private connectTimeoutMs: number;
   private scopes: string[];
   private deviceIdentity?: OpenClawDeviceIdentity;
-  private WebSocketCtor: WebSocketConstructor;
+  private WebSocketCtor?: WebSocketConstructor;
   private socket: WebSocketLike | null = null;
   private pending = new Map<string, PendingRequest>();
   private sessions = new Set<RegisteredSession>();
@@ -171,7 +170,7 @@ export class OpenClawGatewayProvider implements AgentProvider {
     this.scopes = options.scopes ?? DEFAULT_SCOPES;
     this.deviceIdentity = options.deviceIdentity ?? readDeviceIdentityFromEnv(env);
     this.model = options.model || env.OPENCLAW_MODEL || 'gateway configured default';
-    this.WebSocketCtor = options.WebSocketCtor ?? (WebSocket as unknown as WebSocketConstructor);
+    this.WebSocketCtor = options.WebSocketCtor;
   }
 
   async start(): Promise<void> {
@@ -179,27 +178,30 @@ export class OpenClawGatewayProvider implements AgentProvider {
     if (this.connectPromise) return this.connectPromise;
 
     let connectTimer: NodeJS.Timeout | undefined;
-    this.connectPromise = new Promise<void>((resolve, reject) => {
-      this.connectResolve = resolve;
-      this.connectReject = reject;
-      connectTimer = setTimeout(() => {
-        if (!this.connected) {
-          this.failConnection(new Error('OpenClaw connect challenge timed out'));
-        }
-      }, this.connectTimeoutMs);
-      const socket = new this.WebSocketCtor(this.url);
-      this.socket = socket;
-      socket.on('open', () => {
-        // Modern OpenClaw gateways send connect.challenge after opening. The
-        // challenge drives connect auth so the device signature can include nonce.
+    this.connectPromise = (async () => {
+      const WebSocketCtor = this.WebSocketCtor ?? await loadWebSocketConstructor();
+      return new Promise<void>((resolve, reject) => {
+        this.connectResolve = resolve;
+        this.connectReject = reject;
+        connectTimer = setTimeout(() => {
+          if (!this.connected) {
+            this.failConnection(new Error('OpenClaw connect challenge timed out'));
+          }
+        }, this.connectTimeoutMs);
+        const socket = new WebSocketCtor(this.url);
+        this.socket = socket;
+        socket.on('open', () => {
+          // Modern OpenClaw gateways send connect.challenge after opening. The
+          // challenge drives connect auth so the device signature can include nonce.
+        });
+        socket.on('message', data => this.handleRawMessage(rawDataToString(data)));
+        socket.on('error', error => this.failConnection(error));
+        socket.on('close', (code, reason) => {
+          const message = `OpenClaw Gateway closed (code=${code}${reason ? `, reason=${rawDataToString(reason)}` : ''})`;
+          this.failConnection(new Error(message));
+        });
       });
-      socket.on('message', data => this.handleRawMessage(rawDataToString(data)));
-      socket.on('error', error => this.failConnection(error));
-      socket.on('close', (code, reason) => {
-        const message = `OpenClaw Gateway closed (code=${code}${reason ? `, reason=${rawDataToString(reason)}` : ''})`;
-        this.failConnection(new Error(message));
-      });
-    }).finally(() => {
+    })().finally(() => {
       if (connectTimer) clearTimeout(connectTimer);
       this.connectPromise = null;
     });
@@ -568,6 +570,12 @@ export class OpenClawGatewayProvider implements AgentProvider {
       this.failActivePrompt(session, error.message);
     }
   }
+}
+
+
+async function loadWebSocketConstructor(): Promise<WebSocketConstructor> {
+  const mod = await import('ws');
+  return (mod.default ?? mod.WebSocket) as unknown as WebSocketConstructor;
 }
 
 export function buildOpenClawDeviceAuthPayloadV3(params: {
