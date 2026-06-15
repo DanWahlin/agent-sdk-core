@@ -12,6 +12,7 @@ import type {
 } from '../types/providers.js';
 import type { AgentEventType } from '../types/events.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { importOptionalPeer } from './peer-deps.js';
 import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
 
 const CLIENT_VERSION = '0.6.0';
@@ -574,7 +575,7 @@ export class OpenClawGatewayProvider implements AgentProvider {
 
 
 async function loadWebSocketConstructor(): Promise<WebSocketConstructor> {
-  const mod = await import('ws');
+  const mod = await importOptionalPeer<typeof import('ws')>('OpenClaw Gateway', 'ws');
   return (mod.default ?? mod.WebSocket) as unknown as WebSocketConstructor;
 }
 

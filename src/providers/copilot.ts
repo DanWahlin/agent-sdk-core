@@ -18,6 +18,7 @@ import type {
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { importOptionalPeer } from './peer-deps.js';
 import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
 
 export interface CopilotProviderOptions {
@@ -80,7 +81,7 @@ export class CopilotProvider implements AgentProvider {
   }
 
   async start(): Promise<void> {
-    const { CopilotClient } = await import('@github/copilot-sdk');
+    const { CopilotClient } = await importOptionalPeer<typeof import('@github/copilot-sdk')>('Copilot', '@github/copilot-sdk');
     this.client = new CopilotClient({
       logLevel: 'info',
     });

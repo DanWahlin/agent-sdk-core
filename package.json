@@ -1,6 +1,6 @@
 {
   "name": "@codewithdan/agent-sdk-core",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Shared foundation for AI coding agent SDK integration (Copilot, Claude Code, Codex, OpenCode, Hermes, OpenClaw)",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     "build": "tsc -b",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run build",
-    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/package-hygiene.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts tests/hermes.test.ts tests/openclaw-acp.test.ts tests/openclaw-acp-live.test.ts tests/openclaw.test.ts tests/openclaw-live.test.ts tests/attachments.test.ts",
+    "test": "node --import tsx/esm --test tests/types.test.ts tests/tool-classification.test.ts tests/progress.test.ts tests/validation.test.ts tests/diagnostics.test.ts tests/peer-deps.test.ts tests/package-hygiene.test.ts tests/ws-client.test.ts tests/ws-server.test.ts tests/ws-security.test.ts tests/opencode.test.ts tests/hermes.test.ts tests/openclaw-acp.test.ts tests/openclaw-acp-live.test.ts tests/openclaw.test.ts tests/openclaw-live.test.ts tests/attachments.test.ts",
     "test:e2e": "node --import tsx/esm --test tests/e2e.test.ts",
     "test:all": "node --import tsx/esm --test tests/*.test.ts"
   },
@@ -37,7 +37,7 @@
   "peerDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.0 || ^0.3.0",
     "@github/copilot-sdk": "^0.2.0 || ^1.0.0-beta",
-    "@openai/codex-sdk": ">=0.80.0",
+    "@openai/codex-sdk": ">=0.139.0",
     "@opencode-ai/sdk": "^1.0.0"
   },
   "peerDependenciesMeta": {
@@ -62,7 +62,7 @@
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.142",
     "@github/copilot-sdk": "^1.0.0-beta.9",
-    "@openai/codex-sdk": "^0.104.0",
+    "@openai/codex-sdk": "^0.139.0",
     "@opencode-ai/sdk": "^1.2.14",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",

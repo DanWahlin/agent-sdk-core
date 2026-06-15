@@ -12,6 +12,7 @@ import type {
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { importOptionalPeer } from './peer-deps.js';
 
 export interface OpenCodeProviderOptions {
   /** Model in "providerID/modelID" format (e.g., "anthropic/claude-sonnet-4-20250514") */
@@ -62,7 +63,7 @@ export class OpenCodeProvider implements AgentProvider {
   }
 
   async start(): Promise<void> {
-    const { createOpencodeClient } = await import('@opencode-ai/sdk');
+    const { createOpencodeClient } = await importOptionalPeer<typeof import('@opencode-ai/sdk')>('OpenCode', '@opencode-ai/sdk');
     if (this.baseUrl) {
       this.client = createOpencodeClient({ baseUrl: this.baseUrl });
       console.log(`[opencode-provider] connected to existing server at ${this.baseUrl}`);

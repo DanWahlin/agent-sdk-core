@@ -10,6 +10,7 @@ import type {
 } from '../types/providers.js';
 import { getToolDisplayName } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { importOptionalPeer } from './peer-deps.js';
 import { getSafeExtension, isAttachmentSizeValid, isPathWithinBoundary } from './validation.js';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -36,7 +37,7 @@ export class CodexProvider implements AgentProvider {
   }
 
   async start(): Promise<void> {
-    const { Codex } = await import('@openai/codex-sdk');
+    const { Codex } = await importOptionalPeer<typeof import('@openai/codex-sdk')>('Codex', '@openai/codex-sdk');
     this.codex = new Codex();
     console.log(`[codex-provider] SDK initialized (model: ${this.model})`);
   }

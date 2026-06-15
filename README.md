@@ -80,6 +80,28 @@ npm install @opencode-ai/sdk
 npm install ws
 ```
 
+### npm workspaces and optional peer dependencies
+
+Provider SDK packages are optional peer dependencies. They must be installed where Node can resolve them from `@codewithdan/agent-sdk-core`, not merely somewhere else in the monorepo.
+
+This matters in npm workspaces because hoisting can put `@codewithdan/agent-sdk-core` at the workspace root while a provider SDK lands inside an app workspace. In that shape, `new CodexProvider().start()` can fail with a package-resolution error even though the app workspace lists `@openai/codex-sdk`.
+
+Rule of thumb: install each provider SDK in the same package/workspace scope that resolves `@codewithdan/agent-sdk-core`.
+
+```bash
+# If agent-sdk-core is hoisted to the monorepo root, run this from the repo root:
+npm install @codewithdan/agent-sdk-core @openai/codex-sdk
+
+# If only a workspace package installs agent-sdk-core, install the peer in that same workspace:
+npm install @codewithdan/agent-sdk-core @openai/codex-sdk -w packages/server
+```
+
+If a peer is missing or installed in the wrong workspace, provider startup now reports a targeted message such as:
+
+```text
+Codex provider requires optional peer dependency @openai/codex-sdk, but it is not resolvable from @codewithdan/agent-sdk-core. Install @openai/codex-sdk in the same package/workspace scope where @codewithdan/agent-sdk-core is resolved.
+```
+
 ## Quick Start
 
 ```typescript

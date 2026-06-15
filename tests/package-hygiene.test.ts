@@ -76,4 +76,13 @@ describe('package hygiene', () => {
     const providers = await readFile('src/types/providers.ts', 'utf8');
     assert.equal(providers.includes('../index.js'), false);
   });
+
+  it('should require a Codex SDK version with a compatible bundled Codex CLI', async () => {
+    const pkg = await readJson('package.json');
+    const peerDependencies = pkg.peerDependencies as Record<string, string>;
+    const devDependencies = pkg.devDependencies as Record<string, string>;
+
+    assert.equal(peerDependencies['@openai/codex-sdk'], '>=0.139.0');
+    assert.equal(devDependencies['@openai/codex-sdk'], '^0.139.0');
+  });
 });

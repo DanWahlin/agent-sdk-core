@@ -10,6 +10,7 @@ import type {
 } from '../types/providers.js';
 import { classifyToolKind } from './tool-classification.js';
 import { diagnoseError, formatDiagnostic } from './diagnostics.js';
+import { importOptionalPeer } from './peer-deps.js';
 import { getSafeExtension, isAttachmentSizeValid } from './validation.js';
 
 export interface ClaudeProviderOptions {
@@ -116,7 +117,7 @@ export class ClaudeProvider implements AgentProvider {
       contextId: string,
     ): Promise<AgentResult> {
       let result: AgentResult = { status: 'complete' };
-      const { query } = await import('@anthropic-ai/claude-agent-sdk');
+      const { query } = await importOptionalPeer<typeof import('@anthropic-ai/claude-agent-sdk')>('Claude Code', '@anthropic-ai/claude-agent-sdk');
       const contentBlocks = buildContentBlocks(prompt, attachments);
       const messageGenerator = createMessageGenerator(contentBlocks) as Parameters<typeof claudeQuery>[0]['prompt'];
 
